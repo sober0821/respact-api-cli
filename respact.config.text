@@ -1,4 +1,4 @@
-import { ApiInfo, RespactConfig } from "./src/type";
+import { ApiInfo, RespactConfig } from "respact-api-cli";
 
 const importTemplate = `
 /**

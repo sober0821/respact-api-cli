@@ -8,9 +8,21 @@ importers:
 
   .:
     dependencies:
+      '@types/cli-progress':
+        specifier: ^3.11.6
+        version: 3.11.6
+      '@types/lodash':
+        specifier: ^4.17.20
+        version: 4.17.20
+      '@types/node':
+        specifier: ^20.14.9
+        version: 20.19.17
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
+      cli-progress:
+        specifier: ^3.12.0
+        version: 3.12.0
       commander:
         specifier: ^14.0.1
         version: 14.0.1
@@ -26,19 +38,6 @@ importers:
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
-    devDependencies:
-      '@types/cli-progress':
-        specifier: ^3.11.6
-        version: 3.11.6
-      '@types/lodash':
-        specifier: ^4.17.20
-        version: 4.17.20
-      '@types/node':
-        specifier: ^20.14.9
-        version: 20.19.17
-      cli-progress:
-        specifier: ^3.12.0
-        version: 3.12.0
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16

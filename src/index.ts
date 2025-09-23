@@ -21,7 +21,7 @@ program
   .description("Initialize respact config file")
   .action(() => {
     const configContent = fs.readFileSync(
-      path.resolve(__dirname, "../respact.config.ts"),
+      path.resolve(__dirname, "../respact.config.text"),
       "utf-8"
     );
 
@@ -63,3 +63,13 @@ program
   });
 
 program.parse(process.argv);
+
+/**
+ * 用于 respact.config.ts 的辅助函数，以获取类型提示
+ * @param config 你的配置对象
+ */
+export function defineConfig(config: RespactConfig): RespactConfig {
+  return config;
+}
+
+export * from "./type";
