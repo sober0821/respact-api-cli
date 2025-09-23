@@ -1,6 +1,6 @@
 {
   "name": "respact-api-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "自动生成Api对应的接口定义和类型定义",
   "main": "dist/index.js",
   "bin": {
