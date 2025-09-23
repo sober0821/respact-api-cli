@@ -137,6 +137,9 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
         case "PostMapping":
         case "PutMapping":
         case "DeleteMapping":
+          if (value.includes("{") && value.includes("}")) {
+            apiInfo.getType = "path";
+          }
         case "PatchMapping":
           apiInfo.method = POST_MAPPING[param.fieldTypeName];
           apiInfo.url = `${this.baseInfo?.url}${
@@ -182,7 +185,6 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
       const fileName = i.replace(`${filePath}.`, "");
       return i.startsWith(filePath) && fileName && !fileName.includes(".");
     });
-    // TODO
     packageNames.forEach((i) => {
       this.importsNames?.set(i.split(".").pop()!, {
         name: importToNames(i),

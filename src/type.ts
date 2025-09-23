@@ -54,3 +54,13 @@ export interface ImportName {
   name: string;
   path: string;
 }
+
+/**
+ * 用于 respact.config.ts 的辅助函数，以获取类型提示
+ * @param config 你的配置对象
+ */
+export function defineConfig(config: RespactConfig): RespactConfig {
+  return config;
+}
+
+export * from "./type";

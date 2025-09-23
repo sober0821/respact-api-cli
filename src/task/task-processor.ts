@@ -25,15 +25,22 @@ export class TaskProcessor {
     const rootPath = path.resolve(this.config?.source.dir);
     const outputFolder = path.resolve(this.config?.output.dir);
 
+    const generated_outputDir = path.resolve(
+      path.join(outputFolder, this.config.output.typeName)
+    );
+
     console.log(chalk.blue("Starting conversion..."));
 
     // 删除已存在的输出文件
-    if (fs.existsSync(outputFolder)) {
+    if (fs.existsSync(generated_outputDir)) {
       console.log(chalk.blue("删除已存在的输出文件..."));
-      fs.rmSync(outputFolder, { recursive: true });
+      fs.rmSync(generated_outputDir, { recursive: true });
     }
-    // 创建输出文件夹
-    fs.mkdirSync(outputFolder, { recursive: true });
+
+    if (!fs.existsSync(outputFolder)) {
+      // 创建输出文件夹
+      fs.mkdirSync(outputFolder, { recursive: true });
+    }
 
     // 1、获取目录下的所有 Java 文件
     console.log(chalk.blue("获取目录下的所有 Java 文件..."));
@@ -156,6 +163,8 @@ export class TaskProcessor {
     let count = 1;
     while (needParserPaths.size > 0 && count > 0) {
       count++;
+      // console.log([...needParserPaths]);
+
       const parserInterface = new ParserInterface({
         path_package,
         packageMappings: this.config.packageMappings,
@@ -204,38 +213,46 @@ export class TaskProcessor {
 
     const apiContent = this.getApiOutput?.(apiInfos) || "暂未配置getApiOutput";
 
-    const generated_outputDir = path.resolve(
-      path.join(outputFolder, this.config.output.typeName)
-    );
-
     if (this.config.output.apiName) {
       const api_outputDir = path.resolve(
         path.join(outputFolder, this.config.output.apiName)
       );
-      fs.writeFileSync(api_outputDir, JSON.stringify(apiInfos), "utf8");
+      const formatted = await prettier.format(JSON.stringify(apiInfos), {
+        parser: "json",
+      });
+      fs.writeFileSync(api_outputDir, formatted, "utf8");
     }
 
     if (this.config.output.logName) {
       const log_outputDir = path.resolve(
         path.join(outputFolder, this.config.output.logName || "log.json")
       );
-      fs.writeFileSync(
-        log_outputDir,
+
+      const formatted = await prettier.format(
         JSON.stringify({
           needParserPaths: [...needParserPaths],
           canNotParserNames: [...canNotParserNames],
           structures: [...structures],
         }),
-        "utf8"
+        {
+          parser: "json",
+        }
       );
+      fs.writeFileSync(log_outputDir, formatted, "utf8");
     }
     const generated =
       this.config.importTemplate + "\n\n" + tsContent + "\n\n" + apiContent;
-    const formatted = await prettier.format(
-      this.config.importTemplate + "\n\n" + tsContent + "\n\n" + apiContent,
-      { parser: "typescript" }
-    );
-    fs.writeFileSync(generated_outputDir, generated, "utf8");
+
+    try {
+      const formatted = await prettier.format(generated, {
+        parser: "typescript",
+      });
+      fs.writeFileSync(generated_outputDir, formatted, "utf8");
+    } catch (e) {
+      console.log(chalk.red("Prettier 格式化失败, 请检查代码是否正确"));
+      process.exit(1);
+    }
+
     console.log(chalk.green("转换完成，输出目录：" + outputFolder));
   }
 

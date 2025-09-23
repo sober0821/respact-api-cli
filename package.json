@@ -2,13 +2,21 @@
   "name": "respact-api-cli",
   "version": "1.0.3",
   "description": "自动生成Api对应的接口定义和类型定义",
-  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/type.d.ts",
+      "import": "./dist/type.js",
+      "require": "./dist/type.js"
+    }
+  },
+  "main": "dist/type.js",
+  "types": "dist/type.d.ts",
   "bin": {
     "respact-api-cli": "dist/index.js"
   },
   "scripts": {
-    "build": "rm -rf ./dist && tsc && tsc-alias",
-    "init": "node dist/index.js init",
+    "build": "rm -rf ./dist && vite build",
+    "inits": "node dist/index.js init",
     "start": "npm run build && node dist/index.js convert",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -22,18 +30,22 @@
   ],
   "author": "",
   "license": "ISC",
-  "devDependencies": {},
+  "devDependencies": {
+    "vite": "^7.1.7",
+    "vite-plugin-dts": "^4.5.4",
+    "vite-plugin-shebang": "^0.1.6"
+  },
   "dependencies": {
-    "chalk": "^5.6.2",
+    "@types/cli-progress": "^3.11.6",
+    "@types/lodash": "^4.17.20",
+    "@types/node": "^20.14.9",
+    "chalk": "4.1.2",
+    "cli-progress": "^3.12.0",
     "commander": "^14.0.1",
     "java-parser": "^3.0.1",
     "jiti": "^2.5.1",
     "lodash": "^4.17.21",
     "prettier": "^3.6.2",
-    "@types/cli-progress": "^3.11.6",
-    "@types/lodash": "^4.17.20",
-    "@types/node": "^20.14.9",
-    "cli-progress": "^3.12.0",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.5.2"
   }

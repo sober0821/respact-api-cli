@@ -6,6 +6,7 @@ import path from "path";
 import { createJiti } from "jiti";
 import { RespactConfig } from "./type";
 import { TaskProcessor } from "./task/task-processor";
+import templateContent from "./templates/respact.config.text?raw";
 import chalk from "chalk";
 
 // 初始化 jiti，它可以在运行时加载 TS 文件
@@ -20,18 +21,20 @@ program
   .command("init")
   .description("Initialize respact config file")
   .action(() => {
-    const configContent = fs.readFileSync(
-      path.resolve(__dirname, "../respact.config.text"),
-      "utf-8"
-    );
+    const configFilePath = path.join(process.cwd(), "respact.config.ts");
 
-    // 将文件名改为 respact.config.ts
-    fs.writeFileSync(
-      path.join(process.cwd(), "respact.config.ts"),
-      configContent
-    );
+    if (fs.existsSync(configFilePath)) {
+      console.log(chalk.yellow("respact.config.ts 文件已存在，跳过创建。"));
+      return;
+    }
 
-    console.log("respact.config.ts file created.");
+    try {
+      // templateContent 已经是一个字符串了，直接写入即可
+      fs.writeFileSync(configFilePath, templateContent);
+      console.log(chalk.green("✅ 成功创建 respact.config.ts 文件！"));
+    } catch (error) {
+      console.error(chalk.red("创建配置文件时出错："), error);
+    }
   });
 
 program
@@ -40,22 +43,22 @@ program
   .action(async () => {
     const configPath = path.join(process.cwd(), "respact.config.ts");
 
+    const config = (
+      (await jiti.import(configPath)) as { default: RespactConfig }
+    ).default;
+
+    if (!config.source || !config.output.dir) {
+      console.error(
+        chalk.red(
+          "respact.config.js not found. Please run 'init' command first."
+        )
+      );
+      process.exit(1); // 退出进程，而不是返回
+    }
+
+    const task = new TaskProcessor(config);
+    task.convert();
     try {
-      const config = (
-        (await jiti.import(configPath)) as { default: RespactConfig }
-      ).default;
-
-      if (!config.source || !config.output.dir) {
-        console.error(
-          chalk.red(
-            "respact.config.js not found. Please run 'init' command first."
-          )
-        );
-        process.exit(1); // 退出进程，而不是返回
-      }
-
-      const task = new TaskProcessor(config);
-      task.convert();
     } catch (error) {
       console.error("Failed to load or parse respact.config.ts:", error);
       process.exit(1);
@@ -63,13 +66,3 @@ program
   });
 
 program.parse(process.argv);
-
-/**
- * 用于 respact.config.ts 的辅助函数，以获取类型提示
- * @param config 你的配置对象
- */
-export function defineConfig(config: RespactConfig): RespactConfig {
-  return config;
-}
-
-export * from "./type";

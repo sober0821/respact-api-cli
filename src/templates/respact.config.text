@@ -1,4 +1,5 @@
-import { ApiInfo, RespactConfig } from "respact-api-cli";
+import { ApiInfo } from "respact-api-cli";
+import { defineConfig } from "respact-api-cli";
 
 const importTemplate = `
 /**
@@ -109,7 +110,7 @@ const formatApiInfo = (api: ApiInfo) => {
   };
 };
 
-const config: RespactConfig = {
+export default defineConfig({
   // 输入
   source: {
     // Java 源文件目录
@@ -123,7 +124,7 @@ const config: RespactConfig = {
 
   // 输出
   output: {
-    dir: "./respact", // 输出目录
+    dir: "./src/respact", // 输出目录
     typeName: "/generated.ts", // TypeScript 输出目录
     apiName: "/api.json", // Api 输出目录
     logName: "/log.json", // 日志输出目录
@@ -164,5 +165,4 @@ const config: RespactConfig = {
   apiTemplate,
   formatApiInfo,
   apiInfoTemplateKey: (key) => `__${key}__`,
-};
-export default config;
+});
