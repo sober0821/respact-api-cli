@@ -1,0 +1,106 @@
+import fs from "fs";
+import { IToken } from "java-parser";
+import path from "path";
+
+// 递归获取所有 Java 文件
+export function getAllJavaFiles(dir: string): string[] {
+  let results: string[] = [];
+  const list = fs.readdirSync(dir);
+  list.forEach((file) => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+    if (stat && stat.isDirectory()) {
+      results = results.concat(getAllJavaFiles(filePath));
+    } else if (file.endsWith(".java")) {
+      results.push(filePath);
+    }
+  });
+  return results;
+}
+
+export function importToNames(importName: string) {
+  return importName
+    .split(".")
+    .map((i) => i.charAt(0).toUpperCase() + i.slice(1))
+    .join("");
+}
+
+export function getImage(obj: { Identifier?: IToken[] }) {
+  return obj.Identifier?.[0].image;
+}
+
+export function getLine(obj: { Identifier?: IToken[] }) {
+  return obj.Identifier?.[0].startLine;
+}
+
+export function encryptionClassName({
+  code,
+  importsNames,
+  startOffset,
+  endOffset = 0,
+  packageMappings,
+  callback,
+}: {
+  code: string;
+  importsNames?: Map<
+    string,
+    {
+      name: string;
+      path: string;
+    }
+  >;
+  startOffset: number;
+  endOffset?: number;
+  packageMappings?: { [key: string]: string };
+  callback?: (val: {
+    className: string;
+    path: string;
+    packageName: string;
+  }) => void;
+}) {
+  const valueArray = tokenizeJavaType(
+    code.slice(startOffset, endOffset + 1).trim()
+  );
+  const DEFAULT_TYPE_MAP = packageMappings || {};
+  // 记录需要继续解析的类
+  const value = valueArray
+    .map((i) => {
+      // 过滤掉基础类型
+
+      const simpleType = i.charAt(0).toUpperCase() + i.slice(1);
+
+      if (!DEFAULT_TYPE_MAP[simpleType]) {
+        const className = importsNames?.get(i)?.name;
+        const path = importsNames?.get(i)?.path;
+        if (className && path) {
+          callback?.({
+            className,
+            path,
+            packageName: i,
+          });
+          // return className;
+        }
+        return i;
+      } else {
+        return DEFAULT_TYPE_MAP[simpleType];
+      }
+    })
+    .join("");
+
+  return value;
+}
+export function tokenizeJavaType(typeString: string): string[] {
+  if (!typeString) {
+    return [];
+  }
+
+  // 这个正则表达式匹配以下两种情况之一：
+  // 1. 一个或多个连续的字母、数字或下划线（即类型名称）
+  // 2. 单个的 '<' 或 '>' 或 ',' 字符
+  const regex = /[a-zA-Z0-9_]+|[<>,]/g;
+
+  const tokens = typeString.match(regex);
+
+  // 如果没有匹配项，string.match() 可能返回 null，所以我们返回一个空数组
+  return tokens || [];
+}
