@@ -7,7 +7,7 @@
     "respact-api-cli": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && tsc-alias",
+    "build": "rm -rf dist && tsc-alias",
     "init": "node dist/index.js init",
     "start": "npm run build && node dist/index.js convert",
     "test": "echo \"Error: no test specified\" && exit 1"
