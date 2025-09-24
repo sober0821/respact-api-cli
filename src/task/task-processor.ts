@@ -237,7 +237,6 @@ export class TaskProcessor {
       chalk.yellow("未能解析的类型: " + [...canNotParserNames].join(", "))
     );
 
-    const ora_Info = ora(chalk.blue("开始解析类型...")).start();
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;
 
@@ -247,6 +246,8 @@ export class TaskProcessor {
           `第${count}轮询解析类型，还剩 ` + needParserPaths.size + " 个类型"
         )
       );
+
+      console.log(needParserPaths.values());
       count++;
 
       if (count === 20) {
@@ -254,14 +255,13 @@ export class TaskProcessor {
           chalk.red("类型解析多轮无变化，可能存在循环依赖，停止解析")
         );
         process.exit(1);
-        break;
       }
 
       const parserInterface = new ParserInterface({
         path_package,
         packageMappings: this.config.packageMappings,
       });
-
+      const ora_Info = ora(chalk.blue("开始解析类型...\n")).start();
       for (const path of [...needParserPaths]) {
         ora_Info.text = chalk.blue(`正在解析${path}...`);
         if (path_package[path]) {
@@ -269,9 +269,12 @@ export class TaskProcessor {
           parserInterface.visit(parse(inputCode), { inputCode });
           needParserPaths.delete(path);
         } else {
-          console.log(chalk.red(`未找到类型 ${path} 对应的文件，跳过该类型`));
+          ora_Info.text = chalk.red(
+            `未找到类型 ${path} 对应的文件，跳过该类型`
+          );
         }
       }
+      ora_Info.succeed("类型解析完成...");
       structures.push(...parserInterface.structures);
 
       if (parserInterface.needParserNames.size > 0) {
@@ -296,8 +299,6 @@ export class TaskProcessor {
         });
       }
     }
-
-    ora_Info.succeed("类型解析完成，共计 " + structures.length + " 个类型");
 
     // 删除已存在的输出文件
     if (fs.existsSync(generated_outputDir)) {

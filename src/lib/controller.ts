@@ -158,7 +158,7 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
           }
         case "PatchMapping":
           apiInfo.method = this.POST_MAPPING[fieldTypeName];
-          if (param.valuePair === "value") {
+          if (!param.valuePair || param.valuePair === "value") {
             apiInfo.url = `${this.baseInfo?.url}${
               value.startsWith("/") ? "" : "/"
             }${value}`;

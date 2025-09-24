@@ -113,12 +113,12 @@ export default defineConfig({
   // 输入
   source: {
     // Java 源文件目录
-    dir: "/Users/banhuitech/Desktop/work/ib-meeting/",
+    dir: "../ib-meeting/",
   },
 
   controller: {
     // Java Controller 目录
-    dir: "ib-meeting-modules/ib-meeting-platform/src/main/java/com/ibmeeting/platform/interfaces/controller",
+    dir: "ib-meeting-modules/ib-meeting-merchant/src/main/java/com/ibmeeting/merchant/interfaces/controller",
   },
 
   // 输出
