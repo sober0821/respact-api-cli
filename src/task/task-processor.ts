@@ -35,7 +35,6 @@ export class TaskProcessor {
       throw new Error("git.repo is required");
     }
 
-
     this.config = config;
   }
 
@@ -49,7 +48,10 @@ export class TaskProcessor {
     destinationPath: string,
     branch?: string
   ) {
-    console.log(chalk.blue(`正在从 ${repoUrl} 克隆仓库...`));
+    const cloneMessage = branch
+      ? `正在从 ${repoUrl} 的 ${branch} 分支克隆仓库...`
+      : `正在从 ${repoUrl} 克隆仓库...`;
+    console.log(chalk.blue(cloneMessage));
 
     // 构造 git clone 命令
     // --depth 1 表示只克隆最新的提交，可以大大加快克隆速度，对于只需要最新代码的场景非常有用
