@@ -10,6 +10,7 @@ import {
   type MethodModifierCtx,
   type VariableParaRegularParameterCtx,
   type ResultCtx,
+  ElementValuePairCtx,
 } from "java-parser";
 import { encryptionClassName, getImage, importToNames } from ".";
 import { ApiInfo, ImportName } from "@/type";
@@ -24,6 +25,7 @@ interface ElementValueParam {
   classTypeName?: string;
   fieldIndex?: number;
   fieldTypeName?: string;
+  valuePair?: string;
 }
 
 export class ParserController extends BaseJavaCstVisitorWithDefaults {
@@ -106,6 +108,7 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     if (!param) {
       return super.elementValue(ctx, param);
     }
+
     const { startOffset, endOffset = 0 } =
       ctx?.conditionalExpression?.[0]?.location || {};
     const value = this.code
@@ -155,9 +158,12 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
           }
         case "PatchMapping":
           apiInfo.method = this.POST_MAPPING[fieldTypeName];
-          apiInfo.url = `${this.baseInfo?.url}${
-            value.startsWith("/") ? "" : "/"
-          }${value}`;
+          if (param.valuePair === "value") {
+            apiInfo.url = `${this.baseInfo?.url}${
+              value.startsWith("/") ? "" : "/"
+            }${value}`;
+          }
+
           break;
         default:
           break;
@@ -202,6 +208,19 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     return super.methodModifier(ctx, {
       ...param,
       fieldTypeName,
+    });
+  }
+
+  elementValuePair(
+    ctx: ElementValuePairCtx,
+    param?: {
+      fieldIndex?: number;
+      fieldTypeName?: string;
+    }
+  ) {
+    return super.elementValuePair(ctx, {
+      ...param,
+      valuePair: ctx.Identifier[0].image,
     });
   }
 

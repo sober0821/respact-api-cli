@@ -189,17 +189,17 @@ export class TaskProcessor {
       if (parserController.apiInfos.length) {
         const infos = new Set<string>();
         parserController.apiInfos.forEach((i) => {
-          infos.add(i.method + i.url);
+          if (infos.has(i.url)) {
+            console.log(
+              chalk.red("存在重复的接口定义\n", inputFile, "\n", i.url)
+            );
+            process.exit(1);
+          }
+          infos.add(i.url);
         });
-
-        if (parserController.apiInfos.length !== infos.size) {
-          console.log(chalk.red("存在重复的接口定义", inputFile));
-          process.exit(1);
-        } else {
-          apiInfos.push(
-            ...parserController.apiInfos.filter((i) => i.method && i.url)
-          );
-        }
+        apiInfos.push(
+          ...parserController.apiInfos.filter((i) => i.method && i.url)
+        );
       }
       [...parserController.needParserNames].forEach(([key, val]) => {
         needParserPaths.add(val.path);
@@ -209,7 +209,7 @@ export class TaskProcessor {
         ) {
           console.log(
             chalk.yellow(
-              `发现同名类 ${val.path}，请检查是否存在同名类${class_same_name.get(val.name)}`
+              `发现同名类 \n${val.path} \n请检查是否存在同名类\n${class_same_name.get(val.name)}\n`
             )
           );
         } else {
