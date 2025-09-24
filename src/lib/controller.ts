@@ -106,8 +106,6 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     if (!param) {
       return super.elementValue(ctx, param);
     }
-    console.log(ctx, "++");
-
     const { startOffset, endOffset = 0 } =
       ctx?.conditionalExpression?.[0]?.location || {};
     const value = this.code
