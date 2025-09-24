@@ -12,6 +12,7 @@ import cliProgress from "cli-progress";
 import prettier from "prettier";
 import { promisify } from "util";
 import { exec } from "child_process";
+import ora from "ora";
 
 const execPromise = promisify(exec);
 
@@ -247,13 +248,16 @@ export class TaskProcessor {
       chalk.yellow("未能解析的类型: " + [...canNotParserNames].join(", "))
     );
 
-    console.log(chalk.blue("开始解析类型..."));
-
+    const ora_Info = ora(chalk.blue("开始解析类型...")).start();
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;
     while (needParserPaths.size > 0 && count > 0) {
+      console.log(
+        chalk.blue(
+          `第${count}轮询解析类型，还剩 ` + needParserPaths.size + " 个类型"
+        )
+      );
       count++;
-      // console.log([...needParserPaths]);
 
       const parserInterface = new ParserInterface({
         path_package,
@@ -261,10 +265,13 @@ export class TaskProcessor {
       });
 
       for (const path of [...needParserPaths]) {
+        ora_Info.text = chalk.blue(`正在解析${path}...`);
         if (path_package[path]) {
           const inputCode = fs.readFileSync(path_package[path], "utf8");
           parserInterface.visit(parse(inputCode), { inputCode });
           needParserPaths.delete(path);
+        } else {
+          console.log(chalk.red(`未找到类型 ${path} 对应的文件，跳过该类型`));
         }
       }
       structures.push(...parserInterface.structures);
@@ -278,12 +285,13 @@ export class TaskProcessor {
             class_same_name.get(val.name) !== val.path
           ) {
             console.log(
-              chalk.yellow(
+              chalk.red(
                 `发现同名类 ${val.path}，请检查是否存在同名类${class_same_name.get(
                   val.name
                 )}`
               )
             );
+            process.exit(1);
           } else {
             class_same_name.set(val.name, val.path);
           }
@@ -291,9 +299,7 @@ export class TaskProcessor {
       }
     }
 
-    console.log(
-      chalk.green("类型解析完成，共计 " + structures.length + " 个类型")
-    );
+    ora_Info.succeed("类型解析完成，共计 " + structures.length + " 个类型");
 
     // 生成输出内容
     console.log(chalk.blue("开始生成输出内容..."));
