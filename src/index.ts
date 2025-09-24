@@ -56,9 +56,9 @@ program
       process.exit(1); // 退出进程，而不是返回
     }
 
-    const task = new TaskProcessor(config);
-    task.convert();
     try {
+      const task = new TaskProcessor(config);
+      await task.convert();
     } catch (error) {
       console.error("Failed to load or parse respact.config.ts:", error);
       process.exit(1);

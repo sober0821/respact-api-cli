@@ -10,20 +10,95 @@ import { ParserInterface } from "@/lib/interface";
 import { ParserController } from "@/lib/controller";
 import cliProgress from "cli-progress";
 import prettier from "prettier";
+import { promisify } from "util";
+import { exec } from "child_process";
+
+const execPromise = promisify(exec);
 
 export class TaskProcessor {
   private config: RespactConfig;
 
   constructor(config: RespactConfig) {
+    if (!config.source) {
+      throw new Error("source is required");
+    }
+
+    if (!config.controller || !config.controller.dir) {
+      throw new Error("controller is required");
+    }
+
+    if (!config.output) {
+      throw new Error("output is required");
+    }
+
+    if (config.git && !config.git.repo) {
+      throw new Error("git.repo is required");
+    }
+
+
     this.config = config;
+  }
+
+  /**
+   * 从指定的 URL 克隆一个 Git 仓库到本地路径
+   * @param repoUrl 仓库的 URL，例如 "https://github.com/user/repo.git"
+   * @param destinationPath 要克隆到的本地目标路径
+   */
+  async cloneRepository(
+    repoUrl: string,
+    destinationPath: string,
+    branch?: string
+  ) {
+    console.log(chalk.blue(`正在从 ${repoUrl} 克隆仓库...`));
+
+    // 构造 git clone 命令
+    // --depth 1 表示只克隆最新的提交，可以大大加快克隆速度，对于只需要最新代码的场景非常有用
+    const branchOption = branch ? `-b ${branch}` : "";
+    const command = `git clone ${branchOption} ${repoUrl} "${destinationPath}"`;
+
+    try {
+      const { stdout, stderr } = await execPromise(command);
+      if (stderr && !stderr.includes("Cloning into")) {
+        // Git 在克隆时会将进度信息输出到 stderr，所以我们需要过滤掉正常的进度信息
+        console.warn(chalk.yellow(`克隆过程中出现警告或信息: ${stderr}`));
+      }
+      console.log(chalk.green(`✅ 仓库成功克隆到: ${destinationPath}`));
+    } catch (error: any) {
+      console.error(chalk.red(`克隆仓库失败: ${error.message}`));
+      throw error;
+    }
   }
 
   /**
    * 转换 Java 到 TypeScript
    */
   async convert() {
-    const rootPath = path.resolve(this.config?.source.dir);
+    const rootPath = path.resolve(
+      path.join(process.cwd(), this.config?.source.dir)
+    );
     const outputFolder = path.resolve(this.config?.output.dir);
+    console.log(`源文件目录: ${rootPath}`);
+
+    if (this.config.git) {
+      if (fs.existsSync(rootPath)) {
+        console.log(chalk.blue("删除已存在的java文件..."));
+        fs.rmSync(rootPath, { recursive: true });
+      }
+      if (!fs.existsSync(rootPath)) {
+        // 创建输出文件夹
+        fs.mkdirSync(rootPath, { recursive: true });
+      }
+      try {
+        await this.cloneRepository(
+          this.config.git.repo,
+          rootPath,
+          this.config.git.branch
+        );
+      } catch (e) {
+        console.log(chalk.red("克隆仓库失败，请检查 git 配置"));
+        process.exit(1);
+      }
+    }
 
     const generated_outputDir = path.resolve(
       path.join(outputFolder, this.config.output.typeName)
@@ -118,9 +193,22 @@ export class TaskProcessor {
         packageMappings: this.config.packageMappings,
       });
       parserController.visit(cst, { inputCode: javaContent });
-      apiInfos.push(
-        ...parserController.apiInfos.filter((i) => i.method && i.url)
-      );
+
+      if (parserController.apiInfos.length) {
+        const infos = new Set<string>();
+        parserController.apiInfos.forEach((i) => {
+          infos.add(i.method + i.url);
+        });
+
+        if (parserController.apiInfos.length !== infos.size) {
+          console.log(chalk.red("存在重复的接口定义", inputFile));
+          process.exit(1);
+        } else {
+          apiInfos.push(
+            ...parserController.apiInfos.filter((i) => i.method && i.url)
+          );
+        }
+      }
       [...parserController.needParserNames].forEach(([key, val]) => {
         needParserPaths.add(val.path);
         if (
@@ -251,6 +339,11 @@ export class TaskProcessor {
     } catch (e) {
       console.log(chalk.red("Prettier 格式化失败, 请检查代码是否正确"));
       process.exit(1);
+    }
+
+    if (this.config.git) {
+      console.log(chalk.blue("转换完成，去除java代码"));
+      fs.rmSync(rootPath, { recursive: true });
     }
 
     console.log(chalk.green("转换完成，输出目录：" + outputFolder));

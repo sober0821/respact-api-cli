@@ -1,4 +1,5 @@
 export interface RespactConfig {
+  git?: { repo: string; branch?: string };
   source: { dir: string };
   controller: { dir: string };
   importTemplate: string;

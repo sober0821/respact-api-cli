@@ -1,4 +1,4 @@
-import { ApiInfo } from "respact-api-cli";
+import type { ApiInfo } from "respact-api-cli";
 import { defineConfig } from "respact-api-cli";
 
 const importTemplate = `
@@ -13,7 +13,6 @@ import {
   vueQuery,
   type DecorationOptions,
   type DecorationParams,
-  type GetTSelect,
 } from "@/utils/query";
 import { useMutation, type UseMutationOptions } from "@tanstack/vue-query";
 `;
@@ -36,12 +35,12 @@ export function query__key__(
  */
 export function use__key__Query(
   params: DecorationParams<__queryParamsType__>,
-  options?: DecorationOptions<__queryRequestType__, GetTSelect<__queryRequestType__>>,
+  options?: DecorationOptions<__queryRequestType__, __queryRequestType__>,
   config?: Record<string, any>
 ) {
   return vueQuery<
     __queryParamsType__,
-    GetTSelect<__queryRequestType__>
+    __queryRequestType__
   >(
     ["__key__"],
     () => query__key__(isQueryRef(params) ? params.value : params, config),
@@ -82,9 +81,11 @@ const formatApiInfo = (api: ApiInfo) => {
       .replaceAll("{", "/")
       .replaceAll("}", "/")
       .split("/")
-      .filter((i) => !!i || i !== "api")
+      .filter((i) => !!i && i !== "api")
       .map((i) => i.charAt(0).toUpperCase() + i.slice(1))
       .join("") || "Root";
+
+  url = url.replace("/api", "");
 
   if (getType && getType === "path") {
     Object.keys(queryParams || {}).forEach((k) => {
@@ -92,39 +93,50 @@ const formatApiInfo = (api: ApiInfo) => {
     });
   }
 
-  const getQueryParams = (qeury: Record<string, string>) => {
-    return `{${Object.entries(qeury || {})
-      .map(([k, v]) => `"${k}": ${v}`)
-      .join("; ")}}`;
+  const getQueryParams = (qeury: Record<string, string>, isGet?: boolean) => {
+    if (isGet) {
+      return `{${Object.entries(qeury || {})
+        .map(([k, v]) => `${k}${v.includes("undefined") ? "?" : ""}: ${v}`)
+        .join("; ")}}`;
+    }
+    const res = Object.values(qeury || {})[0] || "void";
+    if (res.startsWith("ApiRequest")) {
+      return res.replace("ApiRequest<", "").replace(">", "");
+    }
+    return res;
   };
 
   return {
     key,
     url,
     getType,
-    queryParamsType:
-      api.method === "get"
-        ? getQueryParams(queryParams || {})
-        : Object.values(queryParams || {})[0] || "void",
+    queryParamsType: getQueryParams(
+      queryParams || {},
+      ["get", "del"].includes(api.method)
+    ),
     ...res,
   };
 };
 
 export default defineConfig({
+  git: {
+    repo: "",
+    branch: "master",
+  },
   // 输入
   source: {
     // Java 源文件目录
-    dir: "/Users/banhuitech/Desktop/work/ib-meeting/",
+    dir: "/respact",
   },
 
   controller: {
     // Java Controller 目录
-    dir: "ib-meeting-modules/ib-meeting-platform/src/main/java/com/ibmeeting/platform/interfaces/controller",
+    dir: "",
   },
 
   // 输出
   output: {
-    dir: "./src/respact", // 输出目录
+    dir: "./src/services", // 输出目录
     typeName: "/generated.ts", // TypeScript 输出目录
     apiName: "/api.json", // Api 输出目录
     logName: "/log.json", // 日志输出目录
@@ -133,7 +145,7 @@ export default defineConfig({
   // 其他配置
   // Java 包名到 TypeScript 命名空间的映射
   packageMappings: {
-    Long: "string",
+    Long: "number",
     String: "string",
     int: "number",
     Int: "number",
@@ -153,12 +165,12 @@ export default defineConfig({
     LocalDate: "string",
     Date: "string",
     JavaUtilDate: "string",
-    HttpServletRequest: "any | undefined",
-    HttpServletResponse: "any | undefined",
-    MultipartFile: "any | undefined",
-    Pageable: "any | undefined",
+    HttpServletRequest: "undefined | any",
+    HttpServletResponse: "undefined | any",
+    MultipartFile: "undefined | any",
+    Pageable: "undefined | any",
     ResponseEntity: "Partial",
-    UserDetails: "any | undefined",
+    UserDetails: "undefined | any",
   },
   importTemplate,
 

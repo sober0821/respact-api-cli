@@ -54,6 +54,23 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   // 当前类的基础信息
   private baseInfo?: ControllerBaseInfo;
 
+  private POST_MAPPING = {
+    GetMapping: "get",
+    PostMapping: "post",
+    PutMapping: "put",
+    DeleteMapping: "del",
+    PatchMapping: "patch",
+  };
+
+  private REQUEST_MAPPING = [
+    "ApiOperation",
+    "GetMapping",
+    "PostMapping",
+    "PutMapping",
+    "DeleteMapping",
+    "PatchMapping",
+  ];
+
   constructor({
     path_package,
     packageMappings,
@@ -117,15 +134,11 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
         ...this.apiInfos[param.fieldIndex],
       };
 
-      const POST_MAPPING = {
-        GetMapping: "get",
-        PostMapping: "post",
-        PutMapping: "put",
-        DeleteMapping: "del",
-        PatchMapping: "patch",
-      };
+      const fieldTypeName = this.REQUEST_MAPPING.find((i) =>
+        param.fieldTypeName?.includes(i)
+      );
 
-      switch (param.fieldTypeName) {
+      switch (fieldTypeName) {
         case "ApiOperation":
           // 注释
           apiInfo.comment = this.baseInfo?.comment + value;
@@ -141,7 +154,7 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
             apiInfo.getType = "path";
           }
         case "PatchMapping":
-          apiInfo.method = POST_MAPPING[param.fieldTypeName];
+          apiInfo.method = this.POST_MAPPING[fieldTypeName];
           apiInfo.url = `${this.baseInfo?.url}${
             value.startsWith("/") ? "" : "/"
           }${value}`;
@@ -170,6 +183,22 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     const fieldTypeName =
       ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
         ?.image;
+
+    const defaultType = this.REQUEST_MAPPING.find((i) =>
+      fieldTypeName?.includes(i)
+    ) as keyof typeof this.POST_MAPPING;
+
+    if (
+      param?.fieldIndex !== undefined &&
+      defaultType &&
+      this.POST_MAPPING[defaultType]
+    ) {
+      this.apiInfos[param?.fieldIndex] = {
+        ...this.apiInfos[param?.fieldIndex],
+        url: this.baseInfo?.url || "",
+        method: this.POST_MAPPING[defaultType],
+      };
+    }
     return super.methodModifier(ctx, {
       ...param,
       fieldTypeName,
