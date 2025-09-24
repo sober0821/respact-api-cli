@@ -251,6 +251,23 @@ export class TaskProcessor {
     const ora_Info = ora(chalk.blue("开始解析类型...")).start();
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;
+
+    if (this.config.output.logName) {
+      const log_outputDir = path.resolve(
+        path.join(outputFolder, this.config.output.logName || "log.json")
+      );
+
+      const formatted = await prettier.format(
+        JSON.stringify({
+          path_package,
+        }),
+        {
+          parser: "json",
+        }
+      );
+      fs.writeFileSync(log_outputDir, formatted, "utf8");
+    }
+
     while (needParserPaths.size > 0 && count > 0) {
       console.log(
         chalk.blue(
@@ -258,6 +275,14 @@ export class TaskProcessor {
         )
       );
       count++;
+
+      if (count === 20) {
+        console.log(
+          chalk.red("类型解析多轮无变化，可能存在循环依赖，停止解析")
+        );
+        process.exit(1);
+        break;
+      }
 
       const parserInterface = new ParserInterface({
         path_package,
