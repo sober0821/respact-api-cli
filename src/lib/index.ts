@@ -12,12 +12,13 @@ export function getAllJavaFiles(dir: string): string[] {
     if (stat && stat.isDirectory()) {
       results = results.concat(getAllJavaFiles(filePath));
     } else if (file.endsWith(".java")) {
-      results.push(filePath);
+      // 在将路径添加到结果之前，将其规范化为使用正斜杠
+      const normalizedPath = filePath.replace(/\\/g, "/");
+      results.push(normalizedPath);
     }
   });
   return results;
 }
-
 export function importToNames(importName: string) {
   return importName
     .split(".")

@@ -109,17 +109,6 @@ export class TaskProcessor {
 
     console.log(chalk.blue("Starting conversion..."));
 
-    // 删除已存在的输出文件
-    if (fs.existsSync(generated_outputDir)) {
-      console.log(chalk.blue("删除已存在的输出文件..."));
-      fs.rmSync(generated_outputDir, { recursive: true });
-    }
-
-    if (!fs.existsSync(outputFolder)) {
-      // 创建输出文件夹
-      fs.mkdirSync(outputFolder, { recursive: true });
-    }
-
     // 1、获取目录下的所有 Java 文件
     console.log(chalk.blue("获取目录下的所有 Java 文件..."));
     const allJavaFiles = getAllJavaFiles(rootPath);
@@ -252,22 +241,6 @@ export class TaskProcessor {
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;
 
-    if (this.config.output.logName) {
-      const log_outputDir = path.resolve(
-        path.join(outputFolder, this.config.output.logName || "log.json")
-      );
-
-      const formatted = await prettier.format(
-        JSON.stringify({
-          path_package,
-        }),
-        {
-          parser: "json",
-        }
-      );
-      fs.writeFileSync(log_outputDir, formatted, "utf8");
-    }
-
     while (needParserPaths.size > 0 && count > 0) {
       console.log(
         chalk.blue(
@@ -325,6 +298,17 @@ export class TaskProcessor {
     }
 
     ora_Info.succeed("类型解析完成，共计 " + structures.length + " 个类型");
+
+    // 删除已存在的输出文件
+    if (fs.existsSync(generated_outputDir)) {
+      console.log(chalk.blue("删除已存在的输出文件..."));
+      fs.rmSync(generated_outputDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(outputFolder)) {
+      // 创建输出文件夹
+      fs.mkdirSync(outputFolder, { recursive: true });
+    }
 
     // 生成输出内容
     console.log(chalk.blue("开始生成输出内容..."));
