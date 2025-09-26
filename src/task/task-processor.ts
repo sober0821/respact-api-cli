@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import _ from "lodash";
 import chalk from "chalk";
-import { AbstractStructures, ApiInfo, ImportName, RespactConfig } from "@/type";
+import { AbstractStructures, RespactConfig, TaskConfig } from "@/type";
 import { getAllJavaFiles } from "@/lib";
 import { ParserPackage } from "@/lib/package";
 import { parse } from "java-parser";
@@ -17,26 +17,39 @@ import ora from "ora";
 const execPromise = promisify(exec);
 
 export class TaskProcessor {
-  private config: RespactConfig;
+  private config: TaskConfig;
 
-  constructor(config: RespactConfig) {
-    if (!config.source) {
-      throw new Error("source is required");
-    }
-
-    if (!config.controller || !config.controller.dir) {
-      throw new Error("controller is required");
-    }
-
-    if (!config.output) {
-      throw new Error("output is required");
-    }
-
-    if (config.git && !config.git.repo) {
-      throw new Error("git.repo is required");
-    }
-
+  constructor(config: TaskConfig) {
     this.config = config;
+  }
+
+  validateType(needParserNames?: Set<string>, canNotParserNames?: Set<string>) {
+    const class_same_name = new Set<string>();
+
+    [...(needParserNames || [])].forEach((val) => {
+      const className = val.split(".").pop();
+      if (className && class_same_name.has(className)) {
+        console.log(
+          chalk.yellow(
+            `发现同名类 \n${className} \n请检查是否存在同名类\n${val}\n`
+          )
+        );
+      }
+      class_same_name.add(className || "");
+    });
+
+    [...(canNotParserNames || [])].forEach((n) =>
+      console.log(chalk.yellow("未解析的类型: " + n))
+    );
+
+    if (canNotParserNames?.size) {
+      console.log(
+        chalk.red(
+          "存在未解析的类型，当前版本仅支持常见的Java类型,请在packageMappings中配置"
+        )
+      );
+      process.exit(1);
+    }
   }
 
   /**
@@ -140,73 +153,42 @@ export class TaskProcessor {
     });
     controller_progressBar.start(controllerJavaFiles.length, 0);
 
-    const apiInfos: ApiInfo[] = [];
-    const needParserPaths = new Set<string>();
-    const canNotParserNames = new Set<string>();
     // 检查同名类
-    const class_same_name = new Map<string, string>();
-
+    const parserController = new ParserController({
+      path_package,
+      packageMappings: this.config.packageMappings,
+    });
     for (const inputFile of controllerJavaFiles) {
       const javaContent = fs.readFileSync(inputFile, "utf8");
       const cst = parse(javaContent);
-      const parserController = new ParserController({
-        path_package,
-        packageMappings: this.config.packageMappings,
-      });
-      parserController.visit(cst, { inputCode: javaContent });
 
-      if (parserController.apiInfos.length) {
-        const infos = new Set<string>();
-        parserController.apiInfos.forEach((i) => {
-          if (infos.has(i.url)) {
-            console.log(
-              chalk.red("存在重复的接口定义\n", inputFile, "\n", i.url)
-            );
-            process.exit(1);
-          }
-          infos.add(i.url);
-        });
-        apiInfos.push(
-          ...parserController.apiInfos.filter((i) => i.method && i.url)
-        );
-      }
-      [...parserController.needParserNames].forEach(([key, val]) => {
-        needParserPaths.add(val.path);
-        if (
-          class_same_name.has(val.name) &&
-          class_same_name.get(val.name) !== val.path
-        ) {
-          console.log(
-            chalk.yellow(
-              `发现同名类 \n${val.path} \n请检查是否存在同名类\n${class_same_name.get(val.name)}\n`
-            )
-          );
-        } else {
-          class_same_name.set(val.name, val.path);
-        }
-      });
-      [...parserController.canNotParseNames].forEach((n) =>
-        canNotParserNames.add(n)
-      );
+      parserController.parser(cst, { inputCode: javaContent });
 
       controller_progressBar.increment();
     }
     controller_progressBar.stop();
+
+    this.validateType(
+      parserController.needParserNames,
+      parserController.canNotParseNames
+    );
     console.log(
       chalk.green(
         "解析成功，共计 " +
-          apiInfos.length +
+          parserController.baseInfoList.length +
           " 个接口、" +
-          needParserPaths.size +
+          parserController.needParserNames.size +
           " 个类型"
       )
     );
 
-    console.warn(
-      chalk.yellow("未能解析的类型: " + [...canNotParserNames].join(", "))
-    );
+    const result = {
+      baseInfoList: parserController.baseInfoList,
+      needParserNames: parserController.needParserNames,
+      canNotParserNames: parserController.canNotParseNames,
+    };
 
-    return { apiInfos, needParserPaths, canNotParserNames, class_same_name };
+    return result;
   }
 
   /**
@@ -216,11 +198,14 @@ export class TaskProcessor {
     const rootPath = path.resolve(
       path.join(process.cwd(), this.config?.source.dir)
     );
-    const outputFolder = path.resolve(this.config?.output.dir);
+    const outputFolder = path.resolve(
+      this.config?.output.dir,
+      this.config.name || "/"
+    );
     console.log(`源文件目录: ${rootPath}`);
 
     const generated_outputDir = path.resolve(
-      path.join(outputFolder, this.config.output.typeName)
+      path.join(outputFolder, this.config.output.generatedName)
     );
 
     if (this.config.git) {
@@ -249,9 +234,11 @@ export class TaskProcessor {
     const path_package = await this.getPathPackage(rootPath);
 
     // 3、读取 Controller 目录下的所有文件，解析出接口和类型
-    const { apiInfos, needParserPaths, canNotParserNames, class_same_name } =
+    const { baseInfoList, needParserNames: controllerNeedParserNames } =
       await this.getController(path_package, rootPath);
 
+    let needParserPaths = new Set<string>([...controllerNeedParserNames]);
+    let parseredNames = new Set<string>([]);
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;
 
@@ -275,14 +262,21 @@ export class TaskProcessor {
       const parserInterface = new ParserInterface({
         path_package,
         packageMappings: this.config.packageMappings,
+        parseredNames,
       });
+
       const ora_Info = ora(chalk.blue("开始解析类型...\n")).start();
       for (const path of [...needParserPaths]) {
+        if (parseredNames.has(path)) {
+          needParserPaths.delete(path);
+          continue;
+        }
         ora_Info.text = chalk.blue(`正在解析${path}...`);
         if (path_package[path]) {
           const inputCode = fs.readFileSync(path_package[path], "utf8");
           parserInterface.visit(parse(inputCode), { inputCode });
           needParserPaths.delete(path);
+          parseredNames.add(path);
         } else {
           ora_Info.text = chalk.red(
             `未找到类型 ${path} 对应的文件，跳过该类型`
@@ -291,28 +285,16 @@ export class TaskProcessor {
       }
       ora_Info.succeed("类型解析完成...");
       structures.push(...parserInterface.structures);
+      this.validateType(
+        parserInterface.needParserNames,
+        parserInterface.canNotParseNames
+      );
 
-      if (parserInterface.needParserNames.size > 0) {
-        [...parserInterface.needParserNames].forEach(([key, val]) => {
-          needParserPaths.add(val.path);
-
-          if (
-            class_same_name.has(val.name) &&
-            class_same_name.get(val.name) !== val.path
-          ) {
-            console.log(
-              chalk.red(
-                `发现同名类 ${val.path}，请检查是否存在同名类${class_same_name.get(
-                  val.name
-                )}`
-              )
-            );
-            process.exit(1);
-          } else {
-            class_same_name.set(val.name, val.path);
-          }
-        });
-      }
+      parserInterface.needParserNames.forEach((n) => {
+        if (!parseredNames.has(n)) {
+          needParserPaths.add(n);
+        }
+      });
     }
 
     // 删除已存在的输出文件
@@ -330,15 +312,22 @@ export class TaskProcessor {
     console.log(chalk.blue("开始生成输出内容..."));
 
     structures = _.uniqBy(structures, "name");
+
     const tsContent = this.getTypeOutput(structures);
 
-    const apiContent = this.getApiOutput?.(apiInfos) || "暂未配置getApiOutput";
+    let apiContent = JSON.stringify(baseInfoList, null, 2);
+    if (this.config.formatApiInfo) {
+      apiContent = this.config.formatApiInfo(baseInfoList);
+    } else {
+      apiContent = "const apiContent = " + apiContent;
+      console.log(chalk.yellow("未配置 formatApiInfo, 使用默认输出"));
+    }
 
     if (this.config.output.apiName) {
       const api_outputDir = path.resolve(
         path.join(outputFolder, this.config.output.apiName)
       );
-      const formatted = await prettier.format(JSON.stringify(apiInfos), {
+      const formatted = await prettier.format(JSON.stringify(baseInfoList), {
         parser: "json",
       });
       fs.writeFileSync(api_outputDir, formatted, "utf8");
@@ -351,8 +340,6 @@ export class TaskProcessor {
 
       const formatted = await prettier.format(
         JSON.stringify({
-          needParserPaths: [...needParserPaths],
-          canNotParserNames: [...canNotParserNames],
           structures: [...structures],
         }),
         {
@@ -370,10 +357,10 @@ export class TaskProcessor {
       });
       fs.writeFileSync(generated_outputDir, formatted, "utf8");
     } catch (e) {
+      console.log(e);
       console.log(chalk.red("Prettier 格式化失败, 请检查代码是否正确"));
       process.exit(1);
     }
-
     if (this.config.git) {
       console.log(chalk.blue("转换完成，去除java代码"));
       fs.rmSync(rootPath, { recursive: true });
@@ -460,28 +447,28 @@ export class TaskProcessor {
     return output;
   }
 
-  getApiOutput(apiInfos: ApiInfo[]) {
-    let output = "";
+  // getApiOutput(apiInfos: ApiInfo[]) {
+  //   let output = "";
 
-    for (const api of apiInfos) {
-      const finalApiInfo = this.config.formatApiInfo(api);
+  //   for (const api of apiInfos) {
+  //     const finalApiInfo = this.config.formatApiInfo(api);
 
-      let template = this.config.apiTemplate;
+  //     let template = this.config.apiTemplate;
 
-      Object.entries(finalApiInfo).forEach(
-        ([finalApiInfoKey, finalApiInfoValue]) => {
-          if (finalApiInfoValue) {
-            template = template.replaceAll(
-              this.config.apiInfoTemplateKey(finalApiInfoKey),
-              finalApiInfoValue
-            );
-          }
-        }
-      );
-      output += template;
-      output += "\n\n";
-    }
+  //     Object.entries(finalApiInfo).forEach(
+  //       ([finalApiInfoKey, finalApiInfoValue]) => {
+  //         if (finalApiInfoValue) {
+  //           template = template.replaceAll(
+  //             this.config.apiInfoTemplateKey(finalApiInfoKey),
+  //             finalApiInfoValue
+  //           );
+  //         }
+  //       }
+  //     );
+  //     output += template;
+  //     output += "\n\n";
+  //   }
 
-    return output;
-  }
+  //   return output;
+  // }
 }

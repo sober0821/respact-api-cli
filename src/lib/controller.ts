@@ -11,67 +11,52 @@ import {
   type VariableParaRegularParameterCtx,
   type ResultCtx,
   ElementValuePairCtx,
+  ElementValuePairListCtx,
 } from "java-parser";
-import { encryptionClassName, getImage, importToNames } from ".";
-import { ApiInfo, ImportName } from "@/type";
+import {
+  encryptionClassName,
+  encryptionClassNameTest,
+  getImage,
+  importToNames,
+} from ".";
+import { Modifier, ControllerBaseInfo } from "@/type";
 
-interface ControllerBaseInfo {
-  url?: string;
-  comment?: string;
-  className?: string;
-}
-
-interface ElementValueParam {
-  classTypeName?: string;
-  fieldIndex?: number;
-  fieldTypeName?: string;
-  valuePair?: string;
-}
-
+/**
+ * @path_package
+ * key: com.*.*.*.<className>
+ * value: <packagePath>
+ * @packageMappings
+ * key: JAVA类型
+ * value: TS类型
+ * JAVA类型到TS的映射配置
+ * @importsNames
+ * key: com.*.*.*.<className>
+ *
+ */
 export class ParserController extends BaseJavaCstVisitorWithDefaults {
   // 用于记录所有类名对应的包路径，便于后期解析 import
-  // key: com.ibmeeting.common.domain.dto.<className>
-  // value: <packagePath>
   private path_package: Record<string, string>;
 
   // JAVA类型到TS的映射配置
   private packageMappings: { [key: string]: string };
 
-  // 最终解析出来的接口信息
-  apiInfos: ApiInfo[] = [];
-
   // 用于记录当前文件的 import 类名，便于后期解析类型
   // 包括类名、路径、同文件夹下的类
-  private importsNames?: Map<string, ImportName>;
+  private importsNames?: Set<string>;
 
   // 用于记录需要解析的类
-  needParserNames: Map<string, ImportName>;
+  needParserNames: Set<string>;
 
   // 用于记录无法解析的类（比如来自jar包的import）
   canNotParseNames: Set<string>;
 
   // 当前解析的代码
-  private code: string;
+  private code: string = "";
 
   // 当前类的基础信息
-  private baseInfo?: ControllerBaseInfo;
+  baseInfo?: ControllerBaseInfo;
 
-  private POST_MAPPING = {
-    GetMapping: "get",
-    PostMapping: "post",
-    PutMapping: "put",
-    DeleteMapping: "del",
-    PatchMapping: "patch",
-  };
-
-  private REQUEST_MAPPING = [
-    "ApiOperation",
-    "GetMapping",
-    "PostMapping",
-    "PutMapping",
-    "DeleteMapping",
-    "PatchMapping",
-  ];
+  baseInfoList: ControllerBaseInfo[] = [];
 
   constructor({
     path_package,
@@ -81,97 +66,193 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     packageMappings: { [key: string]: string };
   }) {
     super();
-    this.code = "";
     this.path_package = path_package;
     this.packageMappings = packageMappings;
-    this.needParserNames = new Map<string, ImportName>();
+    this.needParserNames = new Set<string>();
     this.canNotParseNames = new Set();
+    this.importsNames = new Set<string>();
     this.validateVisitor();
+  }
+
+  /**
+   * @packagePath 'com.*.*...' (包路径字符串)
+   * @fileName 'ClassA' (类名)
+   * @packageNames : [ @packagePath + @fileName ] = ['com.*.ClassA','com.*.ClassB',...] (该包路径下的所有类名)
+   */
+  getPackageNames(packagePathArray: string[]) {
+    return Object.keys(this.path_package).filter((i) => {
+      const packagePath = packagePathArray.join(".");
+      const fileName = i.replace(`${packagePath}.`, "");
+      return i.startsWith(packagePath) && fileName && !fileName.includes(".");
+    });
   }
 
   visit(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
     this.code = inputCode;
-    this.apiInfos = [];
-    this.importsNames = new Map<string, ImportName>();
+
+    if (this.baseInfo) {
+      this.baseInfoList.push(this.baseInfo);
+    } else {
+      this.baseInfo = {};
+    }
     return super.visit(ctx);
   }
-
-  classModifier(ctx: ClassModifierCtx) {
-    const classTypeName =
-      ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
-        ?.image;
-
-    return super.classModifier(ctx, { classTypeName });
+  parser(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
+    this.visit(ctx, { inputCode });
+    if (this.baseInfo) {
+      this.baseInfoList.push(this.baseInfo);
+    }
   }
 
-  elementValue(ctx: ElementValueCtx, param?: ElementValueParam) {
-    if (!param) {
-      return super.elementValue(ctx, param);
+  /**
+   * 处理package声明
+   * @pathArray ['com','*','*',...] (包路径数组)
+   * 记录该包路径下的所有类名，便于后期解析import
+   */
+  packageDeclaration(ctx: PackageDeclarationCtx) {
+    const pathArray = ctx.Identifier.map((i) => i.image) || [];
+    this.getPackageNames(pathArray).forEach((i) => {
+      this.importsNames?.add(i);
+    });
+    return super.packageDeclaration(ctx);
+  }
+
+  /**
+   * 处理import声明
+   * @pathArray ['com','*','*',...] (包路径数组)
+   * @star '*' (是否引入该目录下的所有类)
+   */
+  importDeclaration(ctx: ImportDeclarationCtx) {
+    const pathArray =
+      ctx.packageOrTypeName?.[0].children?.Identifier?.map((i) => i.image) ||
+      [];
+    const star = ctx?.Star?.[0]?.image;
+
+    // 记录import的类名，便于后期生成代码时使用
+    if (pathArray.length) {
+      // 如果是引入文件夹，则引入该目录下的所有类
+      if (star) {
+        this.getPackageNames(pathArray).forEach((i) => {
+          this.importsNames?.add(i);
+        });
+      } else {
+        // 否则就是引入具体的类
+        const packageName = pathArray.join(".");
+        if (this.path_package[packageName]) {
+          this.importsNames?.add(packageName);
+        }
+      }
+    }
+    return super.importDeclaration(ctx);
+  }
+
+  getElementValue(location: CstNode["location"]) {
+    const { startOffset = 0, endOffset = 0 } = location || {};
+    const value = this.code.slice(startOffset, endOffset + 1).trim();
+    return value.replaceAll('"', "").replaceAll("'", "").trim();
+  }
+
+  /**
+   *
+   * @param ctx
+   * @returns
+   */
+  classModifier(ctx: ClassModifierCtx) {
+    const classModifier: Modifier = {
+      typeName:
+        ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
+          ?.image,
+    };
+
+    if (!classModifier.typeName) {
+      return super.classModifier(ctx, {
+        classTypeName: classModifier.typeName,
+      });
     }
 
-    const { startOffset, endOffset = 0 } =
-      ctx?.conditionalExpression?.[0]?.location || {};
-    const value = this.code
-      .slice(startOffset, endOffset + 1)
-      .replaceAll('"', "")
-      .replaceAll("'", "")
-      .trim();
+    const elementValue = ctx?.annotation?.[0]?.children?.elementValue;
 
-    if (param?.classTypeName) {
-      switch (param.classTypeName) {
-        case "RequestMapping":
-          this.baseInfo = { ...this.baseInfo, url: value };
-          break;
-        case "Api":
-          // 注释
-          this.baseInfo = {
-            ...this.baseInfo,
-            comment: value,
-          };
-          break;
-        default:
-          break;
-      }
-    } else if (param?.fieldTypeName && param?.fieldIndex !== undefined) {
-      const apiInfo = {
-        ...this.apiInfos[param.fieldIndex],
+    if (elementValue) {
+      // 如果是@*("*")这种形式
+      classModifier.config = {
+        ...classModifier.config,
+        value: this.getElementValue(elementValue[0].location),
       };
+    }
+    this.baseInfo = {
+      ...this.baseInfo,
+      classModifiers: [...(this.baseInfo?.classModifiers || []), classModifier],
+    };
+    return super.classModifier(ctx, { classTypeName: classModifier.typeName });
+  }
 
-      const fieldTypeName = this.REQUEST_MAPPING.find((i) =>
-        param.fieldTypeName?.includes(i)
-      );
+  elementValuePairList(
+    ctx: ElementValuePairListCtx,
+    param?: {
+      classTypeName?: string;
+      fieldTypeName?: string;
+      fieldIndex?: number;
+    }
+  ) {
+    if (param?.classTypeName) {
+      // 处理类注解中的元素值对 @*(key = value, key2 = value2, ...)
+      ctx?.elementValuePair?.forEach((i) => {
+        const key = i.children?.Identifier?.[0]?.image;
+        const value = i.children?.elementValue?.[0]?.location;
 
-      switch (fieldTypeName) {
-        case "ApiOperation":
-          // 注释
-          apiInfo.comment = this.baseInfo?.comment + value;
-          break;
-        case "GetMapping":
-          if (value.includes("{") && value.includes("}")) {
-            apiInfo.getType = "path";
-          }
-        case "PostMapping":
-        case "PutMapping":
-        case "DeleteMapping":
-          if (value.includes("{") && value.includes("}")) {
-            apiInfo.getType = "path";
-          }
-        case "PatchMapping":
-          apiInfo.method = this.POST_MAPPING[fieldTypeName];
-          if (!param.valuePair || param.valuePair === "value") {
-            apiInfo.url = `${this.baseInfo?.url}${
-              value.startsWith("/") ? "" : "/"
-            }${value}`;
-          }
-
-          break;
-        default:
-          break;
-      }
-      this.apiInfos[param.fieldIndex] = apiInfo;
+        this.baseInfo = {
+          ...this.baseInfo,
+          classModifiers: (this.baseInfo?.classModifiers || []).map((ii) => {
+            if (ii.typeName === param.classTypeName) {
+              return {
+                ...ii,
+                config: {
+                  ...(ii.config || {}),
+                  [key || "value"]: this.getElementValue(value),
+                },
+              };
+            }
+            return ii;
+          }),
+        };
+      });
     }
 
-    return super.elementValue(ctx, param);
+    if (
+      param?.fieldTypeName &&
+      (param?.fieldIndex || param?.fieldIndex === 0)
+    ) {
+      ctx?.elementValuePair?.forEach((i) => {
+        const key = i.children?.Identifier?.[0]?.image;
+        const value = i.children?.elementValue?.[0]?.location;
+
+        const fields = this.baseInfo?.fields || [];
+
+        fields[param.fieldIndex!] = {
+          ...fields[param.fieldIndex!],
+          fieldModifiers: (fields[param.fieldIndex!]?.fieldModifiers || []).map(
+            (ii) => {
+              if (ii.typeName === param.fieldTypeName) {
+                return {
+                  ...ii,
+                  config: {
+                    ...(ii.config || {}),
+                    [key || "value"]: this.getElementValue(value),
+                  },
+                };
+              }
+              return ii;
+            }
+          ),
+        };
+
+        this.baseInfo = {
+          ...this.baseInfo,
+          fields,
+        };
+      });
+    }
+    return super.elementValuePairList(ctx, param);
   }
 
   typeIdentifier(ctx: TypeIdentifierCtx) {
@@ -180,102 +261,54 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   }
 
   methodDeclaration(ctx: MethodDeclarationCtx) {
+    if (!this.baseInfo?.fields) {
+      this.baseInfo = { ...this.baseInfo, fields: [] };
+    }
     return super.methodDeclaration(ctx, {
-      fieldIndex: this.apiInfos.length,
+      fieldIndex: this.baseInfo?.fields?.length || 0,
     });
   }
 
   methodModifier(ctx: MethodModifierCtx, param?: { fieldIndex: number }) {
+    if (!param?.fieldIndex && param?.fieldIndex !== 0) {
+      return super.methodModifier(ctx, param);
+    }
+
     const fieldTypeName =
       ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
         ?.image;
 
-    const defaultType = this.REQUEST_MAPPING.find((i) =>
-      fieldTypeName?.includes(i)
-    ) as keyof typeof this.POST_MAPPING;
+    const fieldModifier: Modifier = {
+      typeName: fieldTypeName,
+    };
 
-    if (
-      param?.fieldIndex !== undefined &&
-      defaultType &&
-      this.POST_MAPPING[defaultType]
-    ) {
-      this.apiInfos[param?.fieldIndex] = {
-        ...this.apiInfos[param?.fieldIndex],
-        url: this.baseInfo?.url || "",
-        method: this.POST_MAPPING[defaultType],
+    if (!fieldModifier.typeName) {
+      return super.methodModifier(ctx, param);
+    }
+
+    const elementValue = ctx?.annotation?.[0]?.children?.elementValue;
+
+    if (elementValue) {
+      // 如果是@*("*")这种形式
+      fieldModifier.config = {
+        ...fieldModifier.config,
+        value: this.getElementValue(elementValue[0].location),
       };
     }
+    if (!this.baseInfo?.fields) {
+      return super.methodModifier(ctx, param);
+    }
+    this.baseInfo.fields[param.fieldIndex] = {
+      fieldModifiers: [
+        ...(this.baseInfo?.fields?.[param.fieldIndex]?.fieldModifiers || []),
+        fieldModifier,
+      ],
+    };
+
     return super.methodModifier(ctx, {
       ...param,
       fieldTypeName,
     });
-  }
-
-  elementValuePair(
-    ctx: ElementValuePairCtx,
-    param?: {
-      fieldIndex?: number;
-      fieldTypeName?: string;
-    }
-  ) {
-    return super.elementValuePair(ctx, {
-      ...param,
-      valuePair: ctx.Identifier[0].image,
-    });
-  }
-
-  packageDeclaration(ctx: PackageDeclarationCtx) {
-    const packagePathArray = ctx.Identifier.map((i) => i.image) || [];
-
-    // 记录package所在的目录其他类名
-    const packageNames = Object.keys(this.path_package).filter((i) => {
-      const filePath = packagePathArray.join(".");
-      const fileName = i.replace(`${filePath}.`, "");
-      return i.startsWith(filePath) && fileName && !fileName.includes(".");
-    });
-    packageNames.forEach((i) => {
-      this.importsNames?.set(i.split(".").pop()!, {
-        name: importToNames(i),
-        path: i,
-      });
-    });
-
-    return super.packageDeclaration(ctx);
-  }
-  importDeclaration(ctx: ImportDeclarationCtx) {
-    const importPathArray =
-      ctx.packageOrTypeName?.[0].children?.Identifier?.map((i) => i.image) ||
-      [];
-    const star = ctx?.Star?.[0]?.image;
-
-    // 记录import的类名，便于后期生成代码时使用
-    if (importPathArray.length) {
-      // 如果是引入文件夹，则引入该目录下的所有类
-      if (star) {
-        const packageNames = Object.keys(this.path_package).filter((i) => {
-          const filePath = importPathArray.join(".");
-          const fileName = i.replace(`${filePath}.`, "");
-          return i.startsWith(filePath) && fileName && !fileName.includes(".");
-        });
-
-        packageNames.forEach((i) => {
-          this.importsNames?.set(i.split(".").pop()!, {
-            name: importToNames(i),
-            path: i,
-          });
-        });
-        // 否则就是引入具体的类
-      } else {
-        const className = importPathArray.pop()!;
-        const packageName = importPathArray.join(".");
-        this.importsNames?.set(className, {
-          name: importToNames(`${packageName}.${className}`),
-          path: `${packageName}.${className}`,
-        });
-      }
-    }
-
-    return super.importDeclaration(ctx);
   }
 
   variableParaRegularParameter(
@@ -290,32 +323,42 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
       const { startOffset, endOffset = 0 } = ctx?.unannType[0].location || {};
       const value =
-        encryptionClassName({
+        encryptionClassNameTest({
           code: this.code,
           importsNames: this.importsNames,
           startOffset,
           endOffset,
           packageMappings: this.packageMappings,
-          callback: ({ className, packageName, path }) => {
-            if (className) {
-              if (!className.startsWith("ComIbmeeting")) {
-                this.canNotParseNames.add(packageName);
-              } else {
-                this.needParserNames.set(className, {
-                  name: packageName,
-                  path,
-                });
-              }
+          callback: ({ className, packageName }) => {
+            if (packageName) {
+              this.needParserNames.add(packageName);
+            } else {
+              this.canNotParseNames.add(className);
             }
           },
         }) || "void";
-      this.apiInfos[param.fieldIndex] = {
-        ...this.apiInfos[param.fieldIndex],
-        queryParams: {
-          ...(this.apiInfos[param.fieldIndex]?.queryParams || {}),
-          [variableDeclaratorId || "param"]: value,
-        },
-      };
+
+      const modifiers =
+        ctx?.variableModifier?.map((i) => {
+          return (
+            i?.children?.annotation?.[0]?.children?.typeName?.[0]?.children
+              ?.Identifier?.[0]?.image || ""
+          );
+        }) || [];
+
+      if (this.baseInfo?.fields) {
+        this.baseInfo.fields[param.fieldIndex] = {
+          ...this.baseInfo.fields[param.fieldIndex],
+          params: [
+            ...(this.baseInfo.fields[param.fieldIndex]?.params || []),
+            {
+              modifiers,
+              type: value,
+              name: variableDeclaratorId,
+            },
+          ],
+        };
+      }
     }
 
     return super.variableParaRegularParameter(ctx, param);
@@ -328,30 +371,27 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
       const value =
         startOffset && endOffset
-          ? encryptionClassName({
+          ? encryptionClassNameTest({
               code: this.code,
               importsNames: this.importsNames,
               startOffset,
               endOffset,
               packageMappings: this.packageMappings,
-              callback: ({ className, packageName, path }) => {
-                if (className) {
-                  if (!className.startsWith("ComIbmeeting")) {
-                    this.canNotParseNames.add(packageName);
-                  } else {
-                    this.needParserNames.set(className, {
-                      name: packageName,
-                      path,
-                    });
-                  }
+              callback: ({ className, packageName }) => {
+                if (packageName) {
+                  this.needParserNames.add(packageName);
+                } else {
+                  this.canNotParseNames.add(className);
                 }
               },
             }) || "void"
           : "void";
-      this.apiInfos[param.fieldIndex] = {
-        ...this.apiInfos[param.fieldIndex],
-        queryRequestType: value,
-      };
+      if (this.baseInfo?.fields) {
+        this.baseInfo.fields[param.fieldIndex] = {
+          ...this.baseInfo.fields[param.fieldIndex],
+          result: value,
+        };
+      }
     }
     return super.result(ctx, param);
   }

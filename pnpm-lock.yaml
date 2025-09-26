@@ -47,6 +47,9 @@ importers:
       typescript:
         specifier: ^5.5.2
         version: 5.9.2
+      zod:
+        specifier: ^4.1.11
+        version: 4.1.11
     devDependencies:
       vite:
         specifier: ^7.1.7
@@ -1081,6 +1084,9 @@ packages:
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
 
+  zod@4.1.11:
+    resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
+
 snapshots:
 
   '@babel/helper-string-parser@7.27.1': {}
@@ -1999,3 +2005,5 @@ snapshots:
       defaults: 1.0.4
 
   yallist@4.0.0: {}
+
+  zod@4.1.11: {}
