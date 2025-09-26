@@ -4,6 +4,24 @@ import path from "path";
 
 // 递归获取所有 Java 文件
 export function getAllJavaFiles(dir: string): string[] {
+  if (dir.endsWith(".java")) {
+    const normalizedPath = dir.replace(/\\/g, "/");
+    return [normalizedPath];
+  }
+
+  if (dir.endsWith("/*")) {
+    const list = fs.readdirSync(dir.replace("*", ""));
+    let results: string[] = [];
+    list.forEach((fileName) => {
+      const file = path.join(dir.replace("*", ""), fileName);
+      if (file.endsWith(".java")) {
+        const normalizedPath = file.replace(/\\/g, "/");
+        results.push(normalizedPath);
+      }
+    });
+    return results;
+  }
+
   let results: string[] = [];
   const list = fs.readdirSync(dir);
   list.forEach((file) => {
