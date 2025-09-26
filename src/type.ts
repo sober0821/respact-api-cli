@@ -1,18 +1,27 @@
-export interface RespactConfig {
-  git?: { repo: string; branch?: string };
-  source: { dir: string };
+interface ModuleConfig {
   controller: { dir: string | string[] };
   importTemplate: string;
-  apiTemplate: string;
-  formatApiInfo: (api: ApiInfo) => Record<string, string>;
-  apiInfoTemplateKey: (key: string) => string;
+  formatApiInfo?: (api: ControllerBaseInfo[]) => string;
   output: {
     dir: string;
-    typeName: string;
+    generatedName: string;
     apiName?: string;
     logName?: string;
   };
   packageMappings: { [key: string]: string };
+}
+
+export interface RespactConfig {
+  git?: { repo: string; branch?: string };
+  source: { dir: string };
+
+  modules: ModuleConfig | (ModuleConfig & { name: string })[];
+}
+
+export interface TaskConfig
+  extends Pick<RespactConfig, "git" | "source">,
+    ModuleConfig {
+  name?: string;
 }
 
 export type EnumBaseType = string | number | boolean;
@@ -41,19 +50,26 @@ export interface AbstractStructures {
   // 主体内容
   abstractBody: AbstractBody[];
 }
-
-export interface ApiInfo {
-  url: string;
-  method: string;
-  queryParams?: Record<string, string>;
-  queryRequestType: string;
-  comment?: string;
-  getType?: "query" | "body" | "path";
+export interface Modifier {
+  typeName?: string;
+  config?: Record<string, string>;
 }
 
-export interface ImportName {
-  name: string;
-  path: string;
+export interface ParamModifier {
+  modifiers?: string[];
+  type?: string;
+  name?: string;
+}
+
+export interface Field {
+  fieldModifiers?: Modifier[];
+  params?: ParamModifier[];
+  result?: string;
+}
+export interface ControllerBaseInfo {
+  className?: string;
+  classModifiers?: Modifier[];
+  fields?: Field[];
 }
 
 /**

@@ -1,4 +1,4 @@
-import { AbstractStructures, ImportName } from "@/type";
+import { AbstractStructures } from "@/type";
 
 import {
   BaseJavaCstVisitorWithDefaults,
@@ -16,7 +16,13 @@ import {
   type PackageDeclarationCtx,
   UnannPrimitiveTypeWithOptionalDimsSuffixCtx,
 } from "java-parser";
-import { encryptionClassName, getImage, getLine, importToNames } from ".";
+import {
+  encryptionClassName,
+  encryptionClassNameTest,
+  getImage,
+  getLine,
+  importToNames,
+} from ".";
 
 interface ParamType {
   index: number;
@@ -24,13 +30,23 @@ interface ParamType {
 }
 
 export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
-  importsNames?: Map<string, ImportName>;
+  // 用于记录所有类名对应的包路径，便于后期解析 import
+  private path_package: Record<string, string>;
+
+  // JAVA类型到TS的映射配置
+  private packageMappings: { [key: string]: string };
+
+  // 用于记录当前文件的 import 类名，便于后期解析类型
+  // 包括类名、路径、同文件夹下的类
+  private importsNames?: Set<string>;
 
   // 用于记录已经解析过的类，避免重复解析
   parseredNames: Set<string>;
 
   // 用于记录需要继续解析的类
-  needParserNames: Map<string, ImportName>;
+  needParserNames: Set<string>;
+
+  canNotParseNames: Set<string>;
 
   // 用于存储最终的数据结构
   structures: Partial<AbstractStructures>[];
@@ -42,16 +58,14 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
 
   private pathName: string;
 
-  private path_package: Record<string, string>;
-
-  private packageMappings: { [key: string]: string };
-
   constructor({
     path_package,
     packageMappings,
+    parseredNames,
   }: {
     path_package: Record<string, string>;
     packageMappings: { [key: string]: string };
+    parseredNames?: Set<string>;
   }) {
     super();
     this.validateVisitor();
@@ -60,9 +74,23 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
     this.pathName = "";
     this.structures = [];
     this.path_package = path_package;
-    this.parseredNames = new Set<string>();
-    this.needParserNames = new Map<string, ImportName>();
+    this.parseredNames = new Set<string>([...(parseredNames || [])]);
+    this.canNotParseNames = new Set<string>();
+    this.needParserNames = new Set();
     this.packageMappings = packageMappings;
+  }
+
+  /**
+   * @packagePath 'com.*.*...' (包路径字符串)
+   * @fileName 'ClassA' (类名)
+   * @packageNames : [ @packagePath + @fileName ] = ['com.*.ClassA','com.*.ClassB',...] (该包路径下的所有类名)
+   */
+  getPackageNames(packagePathArray: string[]) {
+    return Object.keys(this.path_package).filter((i) => {
+      const packagePath = packagePathArray.join(".");
+      const fileName = i.replace(`${packagePath}.`, "");
+      return i.startsWith(packagePath) && fileName && !fileName.includes(".");
+    });
   }
 
   setStructuresField(
@@ -93,7 +121,7 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
     },
     { inputCode }: { inputCode: string }
   ) {
-    this.importsNames = new Map<string, ImportName>();
+    this.importsNames = new Set<string>();
     this.code = inputCode;
     this.sequence?.push(...Array(cstNode.location.endLine || 0).fill(""));
     for (const comment of cstNode.comments || []) {
@@ -103,56 +131,33 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
   }
 
   packageDeclaration(ctx: PackageDeclarationCtx) {
-    const packagePathArray = ctx.Identifier.map((i) => i.image) || [];
-    this.pathName = importToNames(packagePathArray.join("."));
-
-    // 记录package所在的目录其他类名
-    const packageNames = Object.keys(this.path_package).filter((i) => {
-      const filePath = packagePathArray.join(".");
-      const fileName = i.replace(`${filePath}.`, "");
-      return i.startsWith(filePath) && fileName && !fileName.includes(".");
+    const pathArray = ctx.Identifier.map((i) => i.image) || [];
+    this.pathName = pathArray.join(".");
+    this.getPackageNames(pathArray).forEach((i) => {
+      this.importsNames?.add(i);
     });
-    packageNames.forEach((i) => {
-      this.importsNames?.set(i.split(".").pop()!, {
-        name: importToNames(i),
-        path: i,
-      });
-    });
-
     return super.packageDeclaration(ctx);
   }
 
   importDeclaration(ctx: ImportDeclarationCtx) {
-    const importPathArray =
+    const pathArray =
       ctx.packageOrTypeName?.[0].children?.Identifier?.map((i) => i.image) ||
       [];
     const star = ctx?.Star?.[0]?.image;
 
     // 记录import的类名，便于后期生成代码时使用
-    if (importPathArray.length) {
+    if (pathArray.length) {
       // 如果是引入文件夹，则引入该目录下的所有类
       if (star) {
-        const packageNames = Object.keys(this.path_package).filter((i) => {
-          const filePath = importPathArray.join(".");
-          const fileName = i.replace(`${filePath}.`, "");
-          return i.startsWith(filePath) && fileName && !fileName.includes(".");
+        this.getPackageNames(pathArray).forEach((i) => {
+          this.importsNames?.add(i);
         });
-        packageNames.forEach((i) => {
-          this.importsNames?.set(i.split(".").pop()!, {
-            name: importToNames(i),
-            path: i,
-          });
-        });
-        // 否则就是引入具体的类
       } else {
-        const className = importPathArray.pop()!;
-        const packageName = importPathArray.join(".");
-        this.importsNames?.set(className, {
-          name: importToNames(
-            packageName ? `${packageName}.${className}` : className
-          ),
-          path: packageName + (packageName ? `.${className}` : className),
-        });
+        // 否则就是引入具体的类
+        const packageName = pathArray.join(".");
+        if (this.path_package[packageName]) {
+          this.importsNames?.add(packageName);
+        }
       }
     }
 
@@ -177,11 +182,22 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
 
       const value = typeParameters ? "<T = Object>" : "";
 
-      // this.structures[param.index].name =
-      //   this.pathName + typeIdentifier + value;
       this.structures[param.index].name = typeIdentifier + value;
 
-      this.parseredNames.add(this.pathName + typeIdentifier + value || "");
+      if (
+        this.pathName + typeIdentifier ===
+        "com.ibmeeting.common.domain.dto.request.PHead"
+      ) {
+        console.log("正在解析的类型:", this.pathName + typeIdentifier);
+        console.log("需要解析的类型:", this.needParserNames);
+        console.log("已经解析的类型:", this.parseredNames);
+      }
+
+      if (this.parseredNames.has(this.pathName + typeIdentifier)) {
+        console.log("需要解析的类型:", this.pathName + typeIdentifier);
+        this.needParserNames.delete(this.pathName + typeIdentifier);
+      }
+      this.parseredNames.add(this.pathName + typeIdentifier);
 
       const startLine = getLine(ctx.typeIdentifier[0]?.children);
 
@@ -211,16 +227,20 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
       const { startOffset = 0, endOffset = 0 } =
         ctx.classType?.[0]?.location || {};
 
-      const extendsName = encryptionClassName({
+      const extendsName = encryptionClassNameTest({
         code: this.code,
         importsNames: this.importsNames,
         startOffset,
         endOffset,
         packageMappings: this.packageMappings,
-        callback: ({ className, packageName, path }) => {
+        callback: ({ className, packageName }) => {
           // 过滤掉已经解析过的类
-          if (className && !this.parseredNames.has(className)) {
-            this.needParserNames.set(className, { name: className, path });
+          if (packageName) {
+            if (!this.parseredNames.has(packageName)) {
+              this.needParserNames.add(packageName);
+            }
+          } else {
+            this.canNotParseNames.add(className);
           }
         },
       });
@@ -268,16 +288,20 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
     if (param && param.fieldIndex !== undefined) {
       const { startOffset, endOffset } = ctx?.unannClassType[0]?.location;
 
-      const value = encryptionClassName({
+      const value = encryptionClassNameTest({
         code: this.code,
         importsNames: this.importsNames,
         startOffset,
         endOffset,
         packageMappings: this.packageMappings,
-        callback: ({ className, packageName, path }) => {
+        callback: ({ className, packageName }) => {
           // 过滤掉已经解析过的类
-          if (className && !this.parseredNames.has(className)) {
-            this.needParserNames.set(className, { name: className, path });
+          if (packageName) {
+            if (!this.parseredNames.has(packageName)) {
+              this.needParserNames.add(packageName);
+            }
+          } else {
+            this.canNotParseNames.add(className);
           }
         },
       });
@@ -295,16 +319,20 @@ export class ParserInterface extends BaseJavaCstVisitorWithDefaults {
       const { startOffset, endOffset } =
         ctx?.unannPrimitiveType?.[0]?.location || {};
 
-      const value = encryptionClassName({
+      const value = encryptionClassNameTest({
         code: this.code,
         importsNames: this.importsNames,
         startOffset,
         endOffset,
         packageMappings: this.packageMappings,
-        callback: ({ className, packageName, path }) => {
+        callback: ({ className, packageName }) => {
           // 过滤掉已经解析过的类
-          if (className && !this.parseredNames.has(className)) {
-            this.needParserNames.set(className, { name: className, path });
+          if (packageName) {
+            if (!this.parseredNames.has(packageName)) {
+              this.needParserNames.add(packageName);
+            }
+          } else {
+            this.canNotParseNames.add(className);
           }
         },
       });

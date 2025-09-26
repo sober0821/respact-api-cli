@@ -108,6 +108,53 @@ export function encryptionClassName({
 
   return value;
 }
+export function encryptionClassNameTest({
+  code,
+  importsNames,
+  startOffset,
+  endOffset = 0,
+  packageMappings,
+  callback,
+}: {
+  code: string;
+  importsNames?: Set<string>;
+  startOffset: number;
+  endOffset?: number;
+  packageMappings?: { [key: string]: string };
+  callback?: (val: { className: string; packageName?: string }) => void;
+}) {
+  const valueArray = tokenizeJavaType(
+    code.slice(startOffset, endOffset + 1).trim()
+  );
+  const DEFAULT_TYPE_MAP = packageMappings || {};
+  // 记录需要继续解析的类
+  const value = valueArray
+    .map((i) => {
+      // 过滤掉基础类型
+
+      const simpleType = i.charAt(0).toUpperCase() + i.slice(1);
+      if (DEFAULT_TYPE_MAP[simpleType]) {
+        return DEFAULT_TYPE_MAP[simpleType];
+      }
+
+      // 如果simpleType是非字母和数字的组合，直接返回
+      if (simpleType && !/^[a-zA-Z0-9]+$/.test(simpleType)) {
+        return i;
+      }
+
+      const packageName = [...(importsNames || [])].find((j) =>
+        j.endsWith(`.${i}`)
+      );
+      callback?.({
+        className: i,
+        packageName,
+      });
+      return i;
+    })
+    .join("");
+
+  return value;
+}
 export function tokenizeJavaType(typeString: string): string[] {
   if (!typeString) {
     return [];

@@ -13,27 +13,13 @@ import {
   ElementValuePairCtx,
   ElementValuePairListCtx,
 } from "java-parser";
-import { encryptionClassName, getImage, importToNames } from ".";
-import { ApiInfo, ImportName } from "@/type";
-
-interface ClassModifier {
-  typeName?: string;
-  config?: Record<string, string>;
-}
-
-interface ControllerBaseInfo {
-  classModifiers?: ClassModifier[];
-  url?: string;
-  comment?: string;
-  className?: string;
-}
-
-interface ElementValueParam {
-  classTypeName?: string;
-  fieldIndex?: number;
-  fieldTypeName?: string;
-  valuePair?: string;
-}
+import {
+  encryptionClassName,
+  encryptionClassNameTest,
+  getImage,
+  importToNames,
+} from ".";
+import { Modifier, ControllerBaseInfo } from "@/type";
 
 /**
  * @path_package
@@ -54,15 +40,12 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   // JAVA类型到TS的映射配置
   private packageMappings: { [key: string]: string };
 
-  // 最终解析出来的接口信息
-  apiInfos: ApiInfo[] = [];
-
   // 用于记录当前文件的 import 类名，便于后期解析类型
   // 包括类名、路径、同文件夹下的类
   private importsNames?: Set<string>;
 
   // 用于记录需要解析的类
-  needParserNames: Map<string, ImportName>;
+  needParserNames: Set<string>;
 
   // 用于记录无法解析的类（比如来自jar包的import）
   canNotParseNames: Set<string>;
@@ -71,24 +54,9 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   private code: string = "";
 
   // 当前类的基础信息
-  private baseInfo?: ControllerBaseInfo;
+  baseInfo?: ControllerBaseInfo;
 
-  private POST_MAPPING = {
-    GetMapping: "get",
-    PostMapping: "post",
-    PutMapping: "put",
-    DeleteMapping: "del",
-    PatchMapping: "patch",
-  };
-
-  private REQUEST_MAPPING = [
-    "ApiOperation",
-    "GetMapping",
-    "PostMapping",
-    "PutMapping",
-    "DeleteMapping",
-    "PatchMapping",
-  ];
+  baseInfoList: ControllerBaseInfo[] = [];
 
   constructor({
     path_package,
@@ -100,9 +68,8 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
     super();
     this.path_package = path_package;
     this.packageMappings = packageMappings;
-    this.needParserNames = new Map<string, ImportName>();
+    this.needParserNames = new Set<string>();
     this.canNotParseNames = new Set();
-    this.apiInfos = [];
     this.importsNames = new Set<string>();
     this.validateVisitor();
   }
@@ -122,7 +89,19 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
   visit(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
     this.code = inputCode;
+
+    if (this.baseInfo) {
+      this.baseInfoList.push(this.baseInfo);
+    } else {
+      this.baseInfo = {};
+    }
     return super.visit(ctx);
+  }
+  parser(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
+    this.visit(ctx, { inputCode });
+    if (this.baseInfo) {
+      this.baseInfoList.push(this.baseInfo);
+    }
   }
 
   /**
@@ -159,7 +138,9 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
       } else {
         // 否则就是引入具体的类
         const packageName = pathArray.join(".");
-        this.importsNames?.add(packageName);
+        if (this.path_package[packageName]) {
+          this.importsNames?.add(packageName);
+        }
       }
     }
     return super.importDeclaration(ctx);
@@ -177,11 +158,17 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
    * @returns
    */
   classModifier(ctx: ClassModifierCtx) {
-    const classModifier: ClassModifier = {
+    const classModifier: Modifier = {
       typeName:
         ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
           ?.image,
     };
+
+    if (!classModifier.typeName) {
+      return super.classModifier(ctx, {
+        classTypeName: classModifier.typeName,
+      });
+    }
 
     const elementValue = ctx?.annotation?.[0]?.children?.elementValue;
 
@@ -201,7 +188,11 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
   elementValuePairList(
     ctx: ElementValuePairListCtx,
-    param?: { classTypeName?: string }
+    param?: {
+      classTypeName?: string;
+      fieldTypeName?: string;
+      fieldIndex?: number;
+    }
   ) {
     if (param?.classTypeName) {
       // 处理类注解中的元素值对 @*(key = value, key2 = value2, ...)
@@ -226,77 +217,43 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
         };
       });
     }
+
+    if (
+      param?.fieldTypeName &&
+      (param?.fieldIndex || param?.fieldIndex === 0)
+    ) {
+      ctx?.elementValuePair?.forEach((i) => {
+        const key = i.children?.Identifier?.[0]?.image;
+        const value = i.children?.elementValue?.[0]?.location;
+
+        const fields = this.baseInfo?.fields || [];
+
+        fields[param.fieldIndex!] = {
+          ...fields[param.fieldIndex!],
+          fieldModifiers: (fields[param.fieldIndex!]?.fieldModifiers || []).map(
+            (ii) => {
+              if (ii.typeName === param.fieldTypeName) {
+                return {
+                  ...ii,
+                  config: {
+                    ...(ii.config || {}),
+                    [key || "value"]: this.getElementValue(value),
+                  },
+                };
+              }
+              return ii;
+            }
+          ),
+        };
+
+        this.baseInfo = {
+          ...this.baseInfo,
+          fields,
+        };
+      });
+    }
     return super.elementValuePairList(ctx, param);
   }
-  // elementValue(ctx: ElementValueCtx, param?: ElementValueParam) {
-  //   if (!param) {
-  //     return super.elementValue(ctx, param);
-  //   }
-
-  //   const { startOffset, endOffset = 0 } =
-  //     ctx?.conditionalExpression?.[0]?.location || {};
-  //   const value = this.code
-  //     .slice(startOffset, endOffset + 1)
-  //     .replaceAll('"', "")
-  //     .replaceAll("'", "")
-  //     .trim();
-
-  //   if (param?.classTypeName) {
-  //     switch (param.classTypeName) {
-  //       case "RequestMapping":
-  //         this.baseInfo = { ...this.baseInfo, url: value };
-  //         break;
-  //       case "Api":
-  //         // 注释
-  //         this.baseInfo = {
-  //           ...this.baseInfo,
-  //           comment: value,
-  //         };
-  //         break;
-  //       default:
-  //         break;
-  //     }
-  //   } else if (param?.fieldTypeName && param?.fieldIndex !== undefined) {
-  //     const apiInfo = {
-  //       ...this.apiInfos[param.fieldIndex],
-  //     };
-
-  //     const fieldTypeName = this.REQUEST_MAPPING.find((i) =>
-  //       param.fieldTypeName?.includes(i)
-  //     );
-
-  //     switch (fieldTypeName) {
-  //       case "ApiOperation":
-  //         // 注释
-  //         apiInfo.comment = this.baseInfo?.comment + value;
-  //         break;
-  //       case "GetMapping":
-  //         if (value.includes("{") && value.includes("}")) {
-  //           apiInfo.getType = "path";
-  //         }
-  //       case "PostMapping":
-  //       case "PutMapping":
-  //       case "DeleteMapping":
-  //         if (value.includes("{") && value.includes("}")) {
-  //           apiInfo.getType = "path";
-  //         }
-  //       case "PatchMapping":
-  //         apiInfo.method = this.POST_MAPPING[fieldTypeName];
-  //         if (!param.valuePair || param.valuePair === "value") {
-  //           apiInfo.url = `${this.baseInfo?.url}${
-  //             value.startsWith("/") ? "" : "/"
-  //           }${value}`;
-  //         }
-
-  //         break;
-  //       default:
-  //         break;
-  //     }
-  //     this.apiInfos[param.fieldIndex] = apiInfo;
-  //   }
-
-  //   return super.elementValue(ctx, param);
-  // }
 
   typeIdentifier(ctx: TypeIdentifierCtx) {
     this.baseInfo = { ...this.baseInfo, className: getImage(ctx) || "" };
@@ -304,127 +261,138 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   }
 
   methodDeclaration(ctx: MethodDeclarationCtx) {
+    if (!this.baseInfo?.fields) {
+      this.baseInfo = { ...this.baseInfo, fields: [] };
+    }
     return super.methodDeclaration(ctx, {
-      fieldIndex: this.apiInfos.length,
+      fieldIndex: this.baseInfo?.fields?.length || 0,
     });
   }
 
   methodModifier(ctx: MethodModifierCtx, param?: { fieldIndex: number }) {
-    console.log(ctx, param);
+    if (!param?.fieldIndex && param?.fieldIndex !== 0) {
+      return super.methodModifier(ctx, param);
+    }
 
     const fieldTypeName =
       ctx?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier?.[0]
         ?.image;
 
-    const defaultType = this.REQUEST_MAPPING.find((i) =>
-      fieldTypeName?.includes(i)
-    ) as keyof typeof this.POST_MAPPING;
+    const fieldModifier: Modifier = {
+      typeName: fieldTypeName,
+    };
 
-    if (
-      param?.fieldIndex !== undefined &&
-      defaultType &&
-      this.POST_MAPPING[defaultType]
-    ) {
-      this.apiInfos[param?.fieldIndex] = {
-        ...this.apiInfos[param?.fieldIndex],
-        url: this.baseInfo?.url || "",
-        method: this.POST_MAPPING[defaultType],
+    if (!fieldModifier.typeName) {
+      return super.methodModifier(ctx, param);
+    }
+
+    const elementValue = ctx?.annotation?.[0]?.children?.elementValue;
+
+    if (elementValue) {
+      // 如果是@*("*")这种形式
+      fieldModifier.config = {
+        ...fieldModifier.config,
+        value: this.getElementValue(elementValue[0].location),
       };
     }
+    if (!this.baseInfo?.fields) {
+      return super.methodModifier(ctx, param);
+    }
+    this.baseInfo.fields[param.fieldIndex] = {
+      fieldModifiers: [
+        ...(this.baseInfo?.fields?.[param.fieldIndex]?.fieldModifiers || []),
+        fieldModifier,
+      ],
+    };
+
     return super.methodModifier(ctx, {
       ...param,
       fieldTypeName,
     });
   }
 
-  // elementValuePair(
-  //   ctx: ElementValuePairCtx,
-  //   param?: {
-  //     fieldIndex?: number;
-  //     fieldTypeName?: string;
-  //   }
-  // ) {
-  //   return super.elementValuePair(ctx, {
-  //     ...param,
-  //     valuePair: ctx.Identifier[0].image,
-  //   });
-  // }
+  variableParaRegularParameter(
+    ctx: VariableParaRegularParameterCtx,
+    param: {
+      fieldIndex: number;
+    }
+  ) {
+    if (param?.fieldIndex !== undefined) {
+      const variableDeclaratorId =
+        ctx?.variableDeclaratorId[0].children.Identifier?.[0].image;
 
-  // variableParaRegularParameter(
-  //   ctx: VariableParaRegularParameterCtx,
-  //   param: {
-  //     fieldIndex: number;
-  //   }
-  // ) {
-  //   if (param?.fieldIndex !== undefined) {
-  //     const variableDeclaratorId =
-  //       ctx?.variableDeclaratorId[0].children.Identifier?.[0].image;
+      const { startOffset, endOffset = 0 } = ctx?.unannType[0].location || {};
+      const value =
+        encryptionClassNameTest({
+          code: this.code,
+          importsNames: this.importsNames,
+          startOffset,
+          endOffset,
+          packageMappings: this.packageMappings,
+          callback: ({ className, packageName }) => {
+            if (packageName) {
+              this.needParserNames.add(packageName);
+            } else {
+              this.canNotParseNames.add(className);
+            }
+          },
+        }) || "void";
 
-  //     const { startOffset, endOffset = 0 } = ctx?.unannType[0].location || {};
-  //     const value =
-  //       encryptionClassName({
-  //         code: this.code,
-  //         importsNames: this.importsNames,
-  //         startOffset,
-  //         endOffset,
-  //         packageMappings: this.packageMappings,
-  //         callback: ({ className, packageName, path }) => {
-  //           if (className) {
-  //             if (!className.startsWith("ComIbmeeting")) {
-  //               this.canNotParseNames.add(packageName);
-  //             } else {
-  //               this.needParserNames.set(className, {
-  //                 name: packageName,
-  //                 path,
-  //               });
-  //             }
-  //           }
-  //         },
-  //       }) || "void";
-  //     this.apiInfos[param.fieldIndex] = {
-  //       ...this.apiInfos[param.fieldIndex],
-  //       queryParams: {
-  //         ...(this.apiInfos[param.fieldIndex]?.queryParams || {}),
-  //         [variableDeclaratorId || "param"]: value,
-  //       },
-  //     };
-  //   }
+      const modifiers =
+        ctx?.variableModifier?.map((i) => {
+          return (
+            i?.children?.annotation?.[0]?.children?.typeName?.[0]?.children
+              ?.Identifier?.[0]?.image || ""
+          );
+        }) || [];
 
-  //   return super.variableParaRegularParameter(ctx, param);
-  // }
+      if (this.baseInfo?.fields) {
+        this.baseInfo.fields[param.fieldIndex] = {
+          ...this.baseInfo.fields[param.fieldIndex],
+          params: [
+            ...(this.baseInfo.fields[param.fieldIndex]?.params || []),
+            {
+              modifiers,
+              type: value,
+              name: variableDeclaratorId,
+            },
+          ],
+        };
+      }
+    }
 
-  // result(ctx: ResultCtx, param?: { fieldIndex: number }) {
-  //   if (param?.fieldIndex !== undefined) {
-  //     const { startOffset = 0, endOffset = 0 } =
-  //       ctx.unannType?.[0].location || {};
+    return super.variableParaRegularParameter(ctx, param);
+  }
 
-  //     const value =
-  //       startOffset && endOffset
-  //         ? encryptionClassName({
-  //             code: this.code,
-  //             importsNames: this.importsNames,
-  //             startOffset,
-  //             endOffset,
-  //             packageMappings: this.packageMappings,
-  //             callback: ({ className, packageName, path }) => {
-  //               if (className) {
-  //                 if (!className.startsWith("ComIbmeeting")) {
-  //                   this.canNotParseNames.add(packageName);
-  //                 } else {
-  //                   this.needParserNames.set(className, {
-  //                     name: packageName,
-  //                     path,
-  //                   });
-  //                 }
-  //               }
-  //             },
-  //           }) || "void"
-  //         : "void";
-  //     this.apiInfos[param.fieldIndex] = {
-  //       ...this.apiInfos[param.fieldIndex],
-  //       queryRequestType: value,
-  //     };
-  //   }
-  //   return super.result(ctx, param);
-  // }
+  result(ctx: ResultCtx, param?: { fieldIndex: number }) {
+    if (param?.fieldIndex !== undefined) {
+      const { startOffset = 0, endOffset = 0 } =
+        ctx.unannType?.[0].location || {};
+
+      const value =
+        startOffset && endOffset
+          ? encryptionClassNameTest({
+              code: this.code,
+              importsNames: this.importsNames,
+              startOffset,
+              endOffset,
+              packageMappings: this.packageMappings,
+              callback: ({ className, packageName }) => {
+                if (packageName) {
+                  this.needParserNames.add(packageName);
+                } else {
+                  this.canNotParseNames.add(className);
+                }
+              },
+            }) || "void"
+          : "void";
+      if (this.baseInfo?.fields) {
+        this.baseInfo.fields[param.fieldIndex] = {
+          ...this.baseInfo.fields[param.fieldIndex],
+          result: value,
+        };
+      }
+    }
+    return super.result(ctx, param);
+  }
 }

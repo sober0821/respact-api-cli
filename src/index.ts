@@ -4,10 +4,11 @@ import { program } from "commander";
 import fs from "fs";
 import path from "path";
 import { createJiti } from "jiti";
-import { RespactConfig } from "./type";
+import { RespactConfig, TaskConfig } from "./type";
 import { TaskProcessor } from "./task/task-processor";
-import templateContent from "./templates/respact.config.text?raw";
+import templateContent from "./templates/respact.config.ts?raw";
 import chalk from "chalk";
+import { validateRespactConfig } from "./task/validate";
 
 // 初始化 jiti，它可以在运行时加载 TS 文件
 const jiti = createJiti(__filename);
@@ -47,18 +48,46 @@ program
       (await jiti.import(configPath)) as { default: RespactConfig }
     ).default;
 
-    if (!config.source || !config.output.dir) {
-      console.error(
-        chalk.red(
-          "respact.config.js not found. Please run 'init' command first."
-        )
-      );
-      process.exit(1); // 退出进程，而不是返回
+    try {
+      await validateRespactConfig(config);
+    } catch (error) {
+      console.error("配置验证失败:\n", error);
+      process.exit(1);
     }
 
     try {
-      const task = new TaskProcessor(config);
-      await task.convert();
+      let taskConfigs: TaskConfig[] = [];
+      if (config.modules instanceof Array) {
+        taskConfigs = config.modules.map((m) => {
+          return {
+            ...config,
+            ...m,
+          };
+        });
+      } else {
+        taskConfigs = [
+          {
+            ...config,
+            ...config.modules,
+          },
+        ];
+      }
+      const uniqueNames = new Set<string>();
+      for (const cfg of taskConfigs) {
+        if (cfg.name) {
+          if (uniqueNames.has(cfg.name)) {
+            console.error(
+              chalk.red(`模块名称 ${cfg.name} 重复，请确保每个模块名称唯一。`)
+            );
+            process.exit(1);
+          }
+          uniqueNames.add(cfg.name);
+        }
+      }
+      for (const cfg of taskConfigs) {
+        const task = new TaskProcessor(cfg);
+        await task.convert();
+      }
     } catch (error) {
       console.error("Failed to load or parse respact.config.ts:\n", error);
       process.exit(1);
