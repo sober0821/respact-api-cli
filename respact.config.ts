@@ -118,7 +118,7 @@ export default defineConfig({
 
   controller: {
     // Java Controller 目录
-    dir: "ib-meeting-modules/ib-meeting-merchant/src/main/java/com/ibmeeting/merchant/interfaces/controller",
+    dir: "ib-meeting-modules/ib-meeting-merchant/src/main/java/com/ibmeeting/merchant/interfaces/controller/AuthController.java",
   },
 
   // 输出

@@ -1,7 +1,7 @@
 export interface RespactConfig {
   git?: { repo: string; branch?: string };
   source: { dir: string };
-  controller: { dir: string };
+  controller: { dir: string | string[] };
   importTemplate: string;
   apiTemplate: string;
   formatApiInfo: (api: ApiInfo) => Record<string, string>;

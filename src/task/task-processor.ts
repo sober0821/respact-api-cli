@@ -72,52 +72,15 @@ export class TaskProcessor {
     }
   }
 
-  /**
-   * 转换 Java 到 TypeScript
-   */
-  async convert() {
-    const rootPath = path.resolve(
-      path.join(process.cwd(), this.config?.source.dir)
-    );
-    const outputFolder = path.resolve(this.config?.output.dir);
-    console.log(`源文件目录: ${rootPath}`);
-
-    if (this.config.git) {
-      if (fs.existsSync(rootPath)) {
-        console.log(chalk.blue("删除已存在的java文件..."));
-        fs.rmSync(rootPath, { recursive: true });
-      }
-      if (!fs.existsSync(rootPath)) {
-        // 创建输出文件夹
-        fs.mkdirSync(rootPath, { recursive: true });
-      }
-      try {
-        await this.cloneRepository(
-          this.config.git.repo,
-          rootPath,
-          this.config.git.branch
-        );
-      } catch (e) {
-        console.log(chalk.red("克隆仓库失败，请检查 git 配置"));
-        process.exit(1);
-      }
-    }
-
-    const generated_outputDir = path.resolve(
-      path.join(outputFolder, this.config.output.typeName)
-    );
-
-    console.log(chalk.blue("Starting conversion..."));
-
+  async getPathPackage(rootPath: string) {
     // 1、获取目录下的所有 Java 文件
     console.log(chalk.blue("获取目录下的所有 Java 文件..."));
     const allJavaFiles = getAllJavaFiles(rootPath);
     console.log(
-      chalk.blue("获取成功，共计 " + allJavaFiles.length + " 个文件")
+      chalk.green("获取成功，共计 " + allJavaFiles.length + " 个文件")
     );
 
     const progressBar = new cliProgress.SingleBar({
-      // 使用 chalk 定义进度条的格式和颜色
       format:
         "解析文件 " +
         chalk.cyan("{bar}") +
@@ -143,26 +106,33 @@ export class TaskProcessor {
       }
     }
     progressBar.stop();
+    return packageCollector.path_package;
+  }
 
-    const path_package = packageCollector.path_package;
-
+  async getController(path_package: Record<string, string>, rootPath: string) {
+    // --------------------------------------------------------------------
     console.log(chalk.blue("获取Controller目录下的所有文件..."));
-    const controllerFileFolder = path.resolve(
-      path.join(rootPath, this.config.controller.dir)
-    );
+    let controllerJavaFiles: string[] = [];
+    const controllerDir =
+      this.config.controller.dir instanceof Array
+        ? this.config.controller.dir
+        : [this.config.controller.dir];
 
-    const controllerJavaFiles = getAllJavaFiles(controllerFileFolder);
+    for (const dir of controllerDir) {
+      const controllerFileFolder = path.resolve(path.join(rootPath, dir));
+      controllerJavaFiles.push(...getAllJavaFiles(controllerFileFolder));
+    }
     console.log(
-      chalk.blue("获取成功，共计 " + controllerJavaFiles.length + " 个文件")
+      chalk.green("获取成功，共计 " + controllerJavaFiles.length + " 个文件")
     );
+    // --------------------------------------------------------------------
 
-    // 遍历输入文件并转换
+    // --------------------------------------------------------------------
     console.log(chalk.blue("遍历Controller文件并转换..."));
     const controller_progressBar = new cliProgress.SingleBar({
-      // 使用 chalk 定义进度条的格式和颜色
       format:
         "解析文件 " +
-        chalk.cyan("{bar}") +
+        chalk.rgb(80, 179, 148)("{bar}") +
         " {percentage}% || {value}/{total} 文件",
       barCompleteChar: "\u2588",
       barIncompleteChar: "\u2591",
@@ -173,7 +143,6 @@ export class TaskProcessor {
     const apiInfos: ApiInfo[] = [];
     const needParserPaths = new Set<string>();
     const canNotParserNames = new Set<string>();
-
     // 检查同名类
     const class_same_name = new Map<string, string>();
 
@@ -236,6 +205,52 @@ export class TaskProcessor {
     console.warn(
       chalk.yellow("未能解析的类型: " + [...canNotParserNames].join(", "))
     );
+
+    return { apiInfos, needParserPaths, canNotParserNames, class_same_name };
+  }
+
+  /**
+   * 转换 Java
+   */
+  async convert() {
+    const rootPath = path.resolve(
+      path.join(process.cwd(), this.config?.source.dir)
+    );
+    const outputFolder = path.resolve(this.config?.output.dir);
+    console.log(`源文件目录: ${rootPath}`);
+
+    const generated_outputDir = path.resolve(
+      path.join(outputFolder, this.config.output.typeName)
+    );
+
+    if (this.config.git) {
+      if (fs.existsSync(rootPath)) {
+        console.log(chalk.blue("删除已存在的java文件..."));
+        fs.rmSync(rootPath, { recursive: true });
+      }
+      if (!fs.existsSync(rootPath)) {
+        // 创建输出文件夹
+        fs.mkdirSync(rootPath, { recursive: true });
+      }
+      try {
+        await this.cloneRepository(
+          this.config.git.repo,
+          rootPath,
+          this.config.git.branch
+        );
+      } catch (e) {
+        console.log(chalk.red("克隆仓库失败，请检查 git 配置"));
+        process.exit(1);
+      }
+    }
+
+    console.log(chalk.white("开始解析..."));
+    // 2、获取 package 映射
+    const path_package = await this.getPathPackage(rootPath);
+
+    // 3、读取 Controller 目录下的所有文件，解析出接口和类型
+    const { apiInfos, needParserPaths, canNotParserNames, class_same_name } =
+      await this.getController(path_package, rootPath);
 
     let structures: Partial<AbstractStructures>[] = [];
     let count = 1;

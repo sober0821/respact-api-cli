@@ -60,7 +60,7 @@ program
       const task = new TaskProcessor(config);
       await task.convert();
     } catch (error) {
-      console.error("Failed to load or parse respact.config.ts:", error);
+      console.error("Failed to load or parse respact.config.ts:\n", error);
       process.exit(1);
     }
   });
