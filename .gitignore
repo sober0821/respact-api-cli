@@ -4,6 +4,6 @@ dist
 
 respact
 
-/respact.config.js
+respact.config.ts
 
 
