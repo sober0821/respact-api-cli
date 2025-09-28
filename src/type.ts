@@ -1,6 +1,6 @@
 interface ModuleConfig {
   controller: { dir: string | string[] };
-  importTemplate: string;
+  importTemplate?: string;
   formatApiInfo?: (api: ControllerBaseInfo[]) => string;
   output: {
     dir: string;

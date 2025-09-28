@@ -2,46 +2,146 @@
 
 这是一个用于生成 API 代码的 CLI 工具。
 
+
+⚠️⚠️⚠️本文将在`/example`目录下示范⚠️⚠️⚠️
+
 ## 安装
 
-通过 npm 全局安装：
+通过 npm 安装：
 
 ```bash
-pnpm install -g respact-api-cli
+pnpm install respact-api-cli -D
 ```
 
 ## 使用
 
-```bash
-respact-api-cli
+将以下指令添加到`package.json`中：
+
+```json
+{
+  //  ...
+  "scripts": {
+    // ...
+    "init-respact": "respact-api-cli init",
+    "fed": "respact-api-cli convert"
+  }
+}
 ```
 
-## 命令
+### 初始化
 
-*   `respact-api-cli`: 显示 "Hello, World!"。
+然后运行以下命令生成初始化文件`respact.config.ts`：
 
-## 开发
+```bash
+pnpm run init-respact
+```
 
-1.  克隆仓库:
-    ```bash
-    git clone <your-repo-url>
-    cd respact-api-cli
-    ```
+#### respact.config.ts
 
-2.  安装依赖:
-    ```bash
-    npm install
-    ```
+```typescript
+import { ControllerBaseInfo, defineConfig } from "respact-api-cli";
 
-3.  构建项目:
-    ```bash
-    npm run build
-    ```
+const importTemplate = `
+/**
+ * 该内容由工具生成，请勿手动修改
+ */
 
-4.  本地链接以进行测试:
-    ```bash
-    sudo npm link
-    ```
+// import ... from "...";
+`;
+
+// function formatApiInfo(infos: ControllerBaseInfo[]): string {
+
+//   // make some string if needed
+//   return "";
+// }
+
+export default defineConfig({
+  // git: {
+  //   repo: "",
+  //   branch: "master",
+  // },
+  // 输入
+  source: {
+    // Java 源文件目录
+    dir: "/respact",
+  },
+
+  modules: {
+    controller: {
+      // Java Controller 目录 string | string[]
+      // 支持.java、/**/、/**/*
+      dir: [],
+    },
+
+    // 输出
+    output: {
+      dir: "./src/services", // 输出目录
+      generatedName: "/generated.ts", // TypeScript 输出目录
+      apiName: "/api.json", // Api 输出目录
+      logName: "/log.json", // 日志输出目录
+    },
+
+    // 其他配置
+    // Java 包名到 TypeScript 命名空间的映射
+    packageMappings: {
+      Long: "number",
+      String: "string",
+      Int: "number",
+      Integer: "number",
+      Boolean: "boolean",
+      Float: "number",
+      Double: "number",
+      List: "Array",
+      Map: "Record",
+      Object: "Record<string, any>",
+      Void: "void",
+      Set: "Array",
+    },
+    importTemplate,
+    // formatApiInfo,
+  },
+});
+```
+
+### 快速开始
+
+我们先使用最基础的配置
+
+```ts
+import { defineConfig } from "respact-api-cli";
+export default defineConfig({
+  source: {
+    dir: "/respact",
+  },
+  modules: {
+    controller: {
+      dir: [],
+    },
+    output: {
+      dir: "./src/services", // 输出目录
+      generatedName: "/generated.ts", // TypeScript 输出目录
+    },
+    packageMappings: {
+      Long: "number",
+      String: "string",
+      Int: "number",
+      Integer: "number",
+      Boolean: "boolean",
+      Float: "number",
+      Double: "number",
+      List: "Array",
+      Map: "Record",
+      Object: "Record<string, any>",
+      Void: "void",
+      Set: "Array",
+    },
+    importTemplate: "",
+  },
+});
+```
+
+
+
 
 ## 许可证
 

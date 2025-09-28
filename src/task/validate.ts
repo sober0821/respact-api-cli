@@ -1,4 +1,3 @@
-import { RespactConfig } from "@/type";
 import { z } from "zod";
 
 // 基础模块配置 Schema
@@ -6,7 +5,7 @@ const BaseModuleConfigSchema = z.object({
   controller: z.object({
     dir: z.union([z.string(), z.array(z.string())]),
   }),
-  importTemplate: z.string(),
+  importTemplate: z.string().optional(),
   formatApiInfo: z
     .function({
       input: z.array(z.any()),
