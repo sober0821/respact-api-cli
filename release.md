@@ -2,7 +2,7 @@
 
 ## 1.1.0
 
-详情请见README.md
+详情请见[README.md](https://github.com/sober0821/respact-api-cli/blob/main/README.md)
 
 
 ### 1.1.1
