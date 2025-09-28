@@ -2,7 +2,6 @@
 
 这是一个用于生成 API 代码的 CLI 工具。
 
-
 ⚠️⚠️⚠️本文将在`/example`目录下示范⚠️⚠️⚠️
 
 ## 安装
@@ -23,7 +22,7 @@ pnpm install respact-api-cli -D
   "scripts": {
     // ...
     "init-respact": "respact-api-cli init",
-    "fed": "respact-api-cli convert"
+    "respact": "respact-api-cli convert"
   }
 }
 ```
@@ -115,10 +114,10 @@ export default defineConfig({
   },
   modules: {
     controller: {
-      dir: [],
+      dir: "/src/main/java/com/example/controller",
     },
     output: {
-      dir: "./src/services", // 输出目录
+      dir: "./services", // 输出目录
       generatedName: "/generated.ts", // TypeScript 输出目录
     },
     packageMappings: {
@@ -134,14 +133,14 @@ export default defineConfig({
       Object: "Record<string, any>",
       Void: "void",
       Set: "Array",
+      T: "T",
     },
     importTemplate: "",
   },
 });
 ```
 
-
-
+respact目录下是准备的JAVA简易用户相关接口
 
 ```
 example/respact/src/main/java/com/example/
@@ -154,6 +153,13 @@ example/respact/src/main/java/com/example/
     └── ApiResponse.java              # 通用响应结构
 ```
 
+这时一切准备就绪，运行
+
+```bash
+pnpm run respact
+```
+
+则可以看到配置文件对应的输出目录中已存在`generated.ts`文件。
 
 ## 许可证
 
