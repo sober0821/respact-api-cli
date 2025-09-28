@@ -2,6 +2,14 @@
 
 这是一个用于生成 API 代码的 CLI 工具。
 
+
+## 特别鸣谢
+
+[java-parser](https://github.com/jhipster/prettier-java)
+
+
+## 注意⚠️
+
 ⚠️⚠️⚠️本文将在`/example`目录下示范⚠️⚠️⚠️
 
 ## 安装
