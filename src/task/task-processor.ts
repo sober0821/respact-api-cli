@@ -202,8 +202,7 @@ export class TaskProcessor {
       path.join(process.cwd(), this.config?.source.dir)
     );
     const outputFolder = path.resolve(
-      this.config?.output.dir,
-      this.config.name || "/"
+      path.join(this.config?.output.dir, this.config.name || "/")
     );
     console.log(`源文件目录: ${rootPath}`);
 
@@ -284,9 +283,10 @@ export class TaskProcessor {
       console.log(chalk.blue("删除已存在的输出文件..."));
       fs.rmSync(generated_outputDir, { recursive: true });
     }
-
+    console.log(chalk.blue("检测输出文件夹..."), fs.existsSync(outputFolder));
     if (!fs.existsSync(outputFolder)) {
       // 创建输出文件夹
+      console.log(chalk.blue("创建输出文件夹..."));
       fs.mkdirSync(outputFolder, { recursive: true });
     }
 

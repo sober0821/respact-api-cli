@@ -1,0 +1,158 @@
+{
+  "structures": [
+    {
+      "type": "class",
+      "name": "ApiResponse<T = Object>",
+      "comments": ["/**\n * 通用API响应结构\n */"],
+      "abstractBody": [
+        {
+          "value": "number",
+          "config": {},
+          "key": "code",
+          "comments": ["/**\n     * 响应码\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "message",
+          "comments": ["/**\n     * 响应消息\n     */"]
+        },
+        {
+          "value": "T",
+          "config": {},
+          "key": "data",
+          "comments": ["/**\n     * 响应数据\n     */"]
+        },
+        {
+          "value": "number",
+          "config": {},
+          "key": "timestamp",
+          "comments": ["/**\n     * 时间戳\n     */"]
+        },
+        {
+          "value": "boolean",
+          "config": {},
+          "key": "success",
+          "comments": ["/**\n     * 成功标识\n     */"]
+        }
+      ]
+    },
+    {
+      "type": "class",
+      "name": "User",
+      "comments": ["/**\n * 用户信息\n */"],
+      "abstractBody": [
+        {
+          "value": "number",
+          "config": {},
+          "key": "id",
+          "comments": ["/**\n     * 用户ID\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "username",
+          "comments": ["/**\n     * 用户名\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "email",
+          "comments": ["/**\n     * 邮箱地址\n     */"]
+        },
+        {
+          "value": "number",
+          "config": {},
+          "key": "age",
+          "comments": ["/**\n     * 用户年龄\n     */"]
+        },
+        {
+          "value": "boolean",
+          "config": {},
+          "key": "active",
+          "comments": ["/**\n     * 是否激活\n     */"]
+        },
+        {
+          "value": "Array<string>",
+          "config": {},
+          "key": "roles",
+          "comments": ["/**\n     * 用户角色列表\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "avatar",
+          "comments": ["/**\n     * 用户头像URL\n     */"]
+        }
+      ]
+    },
+    {
+      "type": "class",
+      "name": "CreateUserRequest",
+      "comments": ["/**\n * 创建用户请求\n */"],
+      "abstractBody": [
+        {
+          "value": "string",
+          "config": {},
+          "key": "username",
+          "comments": ["/**\n     * 用户名（必填）\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "email",
+          "comments": ["/**\n     * 邮箱地址（必填）\n     */"]
+        },
+        {
+          "value": "number",
+          "config": {},
+          "key": "age",
+          "comments": ["/**\n     * 用户年龄\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "avatar",
+          "comments": ["/**\n     * 用户头像URL\n     */"]
+        }
+      ]
+    },
+    {
+      "type": "class",
+      "name": "UpdateUserRequest",
+      "comments": ["/**\n * 更新用户请求\n */"],
+      "abstractBody": [
+        {
+          "value": "string",
+          "config": {},
+          "key": "username",
+          "comments": ["/**\n     * 用户名\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "email",
+          "comments": ["/**\n     * 邮箱地址\n     */"]
+        },
+        {
+          "value": "number",
+          "config": {},
+          "key": "age",
+          "comments": ["/**\n     * 用户年龄\n     */"]
+        },
+        {
+          "value": "string",
+          "config": {},
+          "key": "avatar",
+          "comments": ["/**\n     * 用户头像URL\n     */"]
+        },
+        {
+          "value": "boolean",
+          "config": {},
+          "key": "active",
+          "comments": ["/**\n     * 是否激活\n     */"]
+        }
+      ]
+    }
+  ]
+}

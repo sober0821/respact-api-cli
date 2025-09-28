@@ -143,6 +143,18 @@ export default defineConfig({
 
 
 
+```
+example/respact/src/main/java/com/example/
+├── controller/
+│   └── UserController.java          # 用户控制器
+└── dto/
+    ├── User.java                     # 用户实体
+    ├── CreateUserRequest.java        # 创建用户请求
+    ├── UpdateUserRequest.java        # 更新用户请求
+    └── ApiResponse.java              # 通用响应结构
+```
+
+
 ## 许可证
 
 [ISC](LICENSE)
