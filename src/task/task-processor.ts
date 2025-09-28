@@ -18,9 +18,10 @@ const execPromise = promisify(exec);
 
 export class TaskProcessor {
   private config: TaskConfig;
+  private path_package: Record<string, string> = {};
 
-  constructor(config: TaskConfig) {
-    this.config = config;
+  constructor() {
+    this.config = {} as TaskConfig;
   }
 
   validateType(needParserNames?: Set<string>, canNotParserNames?: Set<string>) {
@@ -119,7 +120,8 @@ export class TaskProcessor {
       }
     }
     progressBar.stop();
-    return packageCollector.path_package;
+    // return packageCollector.path_package;
+    this.path_package = packageCollector.path_package;
   }
 
   async getController(path_package: Record<string, string>, rootPath: string) {
@@ -194,7 +196,8 @@ export class TaskProcessor {
   /**
    * 转换 Java
    */
-  async convert() {
+  async convert(config: TaskConfig) {
+    this.config = config;
     const rootPath = path.resolve(
       path.join(process.cwd(), this.config?.source.dir)
     );
@@ -208,30 +211,9 @@ export class TaskProcessor {
       path.join(outputFolder, this.config.output.generatedName)
     );
 
-    if (this.config.git) {
-      if (fs.existsSync(rootPath)) {
-        console.log(chalk.blue("删除已存在的java文件..."));
-        fs.rmSync(rootPath, { recursive: true });
-      }
-      if (!fs.existsSync(rootPath)) {
-        // 创建输出文件夹
-        fs.mkdirSync(rootPath, { recursive: true });
-      }
-      try {
-        await this.cloneRepository(
-          this.config.git.repo,
-          rootPath,
-          this.config.git.branch
-        );
-      } catch (e) {
-        console.log(chalk.red("克隆仓库失败，请检查 git 配置"));
-        process.exit(1);
-      }
-    }
-
     console.log(chalk.white("开始解析..."));
     // 2、获取 package 映射
-    const path_package = await this.getPathPackage(rootPath);
+    const path_package = this.path_package;
 
     // 3、读取 Controller 目录下的所有文件，解析出接口和类型
     const { baseInfoList, needParserNames: controllerNeedParserNames } =
@@ -361,10 +343,6 @@ export class TaskProcessor {
       console.log(chalk.red("Prettier 格式化失败, 请检查代码是否正确"));
       process.exit(1);
     }
-    if (this.config.git) {
-      console.log(chalk.blue("转换完成，去除java代码"));
-      fs.rmSync(rootPath, { recursive: true });
-    }
 
     console.log(chalk.green("转换完成，输出目录：" + outputFolder));
   }
@@ -446,29 +424,4 @@ export class TaskProcessor {
 
     return output;
   }
-
-  // getApiOutput(apiInfos: ApiInfo[]) {
-  //   let output = "";
-
-  //   for (const api of apiInfos) {
-  //     const finalApiInfo = this.config.formatApiInfo(api);
-
-  //     let template = this.config.apiTemplate;
-
-  //     Object.entries(finalApiInfo).forEach(
-  //       ([finalApiInfoKey, finalApiInfoValue]) => {
-  //         if (finalApiInfoValue) {
-  //           template = template.replaceAll(
-  //             this.config.apiInfoTemplateKey(finalApiInfoKey),
-  //             finalApiInfoValue
-  //           );
-  //         }
-  //       }
-  //     );
-  //     output += template;
-  //     output += "\n\n";
-  //   }
-
-  //   return output;
-  // }
 }

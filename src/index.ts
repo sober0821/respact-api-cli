@@ -84,9 +84,39 @@ program
           uniqueNames.add(cfg.name);
         }
       }
+
+      const task = new TaskProcessor();
+      const rootPath = path.resolve(
+        path.join(process.cwd(), config?.source.dir)
+      );
+      if (config.git) {
+        if (fs.existsSync(rootPath)) {
+          console.log(chalk.blue("删除已存在的java文件..."));
+          fs.rmSync(rootPath, { recursive: true });
+        }
+        if (!fs.existsSync(rootPath)) {
+          // 创建输出文件夹
+          fs.mkdirSync(rootPath, { recursive: true });
+        }
+        try {
+          await task.cloneRepository(
+            config.git.repo,
+            rootPath,
+            config.git.branch
+          );
+        } catch (e) {
+          console.log(chalk.red("克隆仓库失败，请检查 git 配置"));
+          process.exit(1);
+        }
+      }
+
+      await task.getPathPackage(rootPath);
       for (const cfg of taskConfigs) {
-        const task = new TaskProcessor(cfg);
-        await task.convert();
+        await task.convert(cfg);
+      }
+      if (config.git) {
+        console.log(chalk.blue("转换完成，去除java代码"));
+        fs.rmSync(rootPath, { recursive: true });
       }
     } catch (error) {
       console.error("Failed to load or parse respact.config.ts:\n", error);

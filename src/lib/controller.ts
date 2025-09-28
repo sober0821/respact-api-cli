@@ -90,11 +90,7 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
   visit(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
     this.code = inputCode;
 
-    if (this.baseInfo) {
-      this.baseInfoList.push(this.baseInfo);
-    } else {
-      this.baseInfo = {};
-    }
+    this.baseInfo = {};
     return super.visit(ctx);
   }
   parser(ctx: CstNode | CstNode[], { inputCode }: { inputCode: string }) {
