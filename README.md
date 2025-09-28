@@ -7,7 +7,7 @@
 通过 npm 全局安装：
 
 ```bash
-npm install -g respact-api-cli
+pnpm install -g respact-api-cli
 ```
 
 ## 使用
