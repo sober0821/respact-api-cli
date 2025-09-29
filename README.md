@@ -41,73 +41,6 @@ pnpm install respact-api-cli -D
 pnpm run init-respact
 ```
 
-#### respact.config.ts
-
-```typescript
-import { ControllerBaseInfo, defineConfig } from "respact-api-cli";
-
-const importTemplate = `
-/**
- * 该内容由工具生成，请勿手动修改
- */
-
-// import ... from "...";
-`;
-
-// function formatApiInfo(infos: ControllerBaseInfo[]): string {
-
-//   // make some string if needed
-//   return "";
-// }
-
-export default defineConfig({
-  // git: {
-  //   repo: "",
-  //   branch: "master",
-  // },
-  // 输入
-  source: {
-    // Java 源文件目录
-    dir: "/respact",
-  },
-
-  modules: {
-    controller: {
-      // Java Controller 目录 string | string[]
-      // 支持.java、/**/、/**/*
-      dir: [],
-    },
-
-    // 输出
-    output: {
-      dir: "./src/services", // 输出目录
-      generatedName: "/generated.ts", // TypeScript 输出目录
-      apiName: "/api.json", // Api 输出目录
-      logName: "/log.json", // 日志输出目录
-    },
-
-    // 其他配置
-    // Java 包名到 TypeScript 命名空间的映射
-    packageMappings: {
-      Long: "number",
-      String: "string",
-      Int: "number",
-      Integer: "number",
-      Boolean: "boolean",
-      Float: "number",
-      Double: "number",
-      List: "Array",
-      Map: "Record",
-      Object: "Record<string, any>",
-      Void: "void",
-      Set: "Array",
-    },
-    importTemplate,
-    // formatApiInfo,
-  },
-});
-```
-
 ### 快速开始
 
 我们先使用最基础的配置
@@ -397,9 +330,48 @@ const apiContent = [
 
 ```
 
+#### respact.config.ts
 
+```typescript
+interface ModuleConfig {
+  // Java Controller 目录 string | string[]
+  // 支持.java、/**/、/**/*
+  controller: { dir: string | string[] };
 
+  // 生成的文件头部内容配合formatApiInfo使用
+  importTemplate?: string;
+  // 如果没有配置formatApiInfo则会生成ControllerBaseInfo[]类型的JSON
+  // 作用：通过二次解析controller生成的结构，去生成对应的前端接口方法
+  formatApiInfo?: (api: ControllerBaseInfo[]) => string;
 
+  output: {
+    // 生成的文件根目录
+    dir: string;
+    // 生成的文件名
+    generatedName: string;
+    // ControllerBaseInfo[]类型的JSON
+    apiName?: string;
+    // 所有需要的类型
+    logName?: string;
+  };
+  // 用来处理JAVA====>TS的类型映射
+  packageMappings: { [key: string]: string };
+}
+
+export interface RespactConfig {
+  // 如果配置了git，则会拉取对应分支的代码到source.dir目录下
+  git?: {
+    // git地址
+    repo: string;
+    // 分支
+    branch?: string;
+  };
+  // Java文件的根目录
+  source: { dir: string };
+  // 具体配置
+  modules: ModuleConfig | (ModuleConfig & { name: string })[];
+}
+```
 
 ## 许可证
 
