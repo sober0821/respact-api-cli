@@ -1,17 +1,11 @@
 {
   "name": "example",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
-    "init-respact": "respact-api-cli init",
-    "respact": "respact-api-cli convert"
+    "test": "node ../dist/index.js convert"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.12.2",
-  "devDependencies": {
-    "respact-api-cli": "^1.1.0"
-  }
+  "packageManager": "pnpm@10.12.2"
 }
