@@ -336,10 +336,33 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
       const modifiers =
         ctx?.variableModifier?.map((i) => {
-          return (
-            i?.children?.annotation?.[0]?.children?.typeName?.[0]?.children
-              ?.Identifier?.[0]?.image || ""
-          );
+          console.log(i);
+
+          let elementValue =
+            i?.children?.annotation?.[0]?.children?.elementValue?.[0];
+
+          if (!elementValue) {
+            elementValue =
+              i?.children?.annotation?.[0]?.children?.elementValuePairList?.find(
+                (ii) => {
+                  return (
+                    ii?.children?.elementValuePair?.[0]?.children
+                      ?.Identifier?.[0]?.image === "value"
+                  );
+                }
+              )?.children?.elementValuePair?.[0]?.children?.elementValue?.[0];
+          }
+
+          return {
+            typeName:
+              i?.children?.annotation?.[0]?.children?.typeName?.[0]?.children
+                ?.Identifier?.[0]?.image || "",
+            config: {
+              ...(elementValue && {
+                value: this.getElementValue(elementValue.location),
+              }),
+            },
+          };
         }) || [];
 
       if (this.baseInfo?.fields) {

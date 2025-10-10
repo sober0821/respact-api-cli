@@ -56,7 +56,7 @@ export interface Modifier {
 }
 
 export interface ParamModifier {
-  modifiers?: string[];
+  modifiers?: Modifier[];
   type?: string;
   name?: string;
 }
