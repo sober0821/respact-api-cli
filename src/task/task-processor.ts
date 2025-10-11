@@ -331,8 +331,11 @@ export class TaskProcessor {
       fs.writeFileSync(log_outputDir, formatted, "utf8");
     }
     const generated =
-      this.config.importTemplate ||
-      "" + "\n\n" + tsContent + "\n\n" + apiContent;
+      (this.config.importTemplate || "") +
+      "\n\n" +
+      tsContent +
+      "\n\n" +
+      apiContent;
 
     try {
       const formatted = await prettier.format(generated, {
