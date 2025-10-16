@@ -336,8 +336,6 @@ export class ParserController extends BaseJavaCstVisitorWithDefaults {
 
       const modifiers =
         ctx?.variableModifier?.map((i) => {
-          console.log(i);
-
           let elementValue =
             i?.children?.annotation?.[0]?.children?.elementValue?.[0];
 
