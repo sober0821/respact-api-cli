@@ -399,7 +399,7 @@ export class TaskProcessor {
             if (item.key !== undefined && item.value !== undefined) {
               output += `  ${item.key}${item.required ? "" : "?"}: ${
                 item.value
-              };\n`;
+              }${item.required ? "" : "| null"};\n`;
             }
           });
           output += `}\n\n`;
